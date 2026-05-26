@@ -137,7 +137,7 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 ### One-line install
 
 ```bash
-git clone https://github.com/YOUR_NAME/local-voice-input.git
+git clone https://github.com/aimer1124/local-voice-input.git
 cd local-voice-input
 ./install.sh
 ```
