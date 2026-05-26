@@ -1,0 +1,38 @@
+# vinput 配置文件 — 被 vinput.sh / vinput_bg.sh 在启动时 source
+# 任意变量未设置时，脚本会用内置默认值
+
+# ===== Whisper ASR =====
+MODEL_PATH="$HOME/.whisper_models/ggml-large-v3-turbo-q5_0.bin"
+WHISPER_LANG="zh"
+WHISPER_THREADS=8
+
+# ===== Ollama LLM 润色 =====
+OLLAMA_MODEL="qwen2.5:3b"
+OLLAMA_URL="http://localhost:11434"
+
+# 文本短于此阈值时跳过 LLM，直接用原始 ASR 结果
+SHORT_TEXT_THRESHOLD=15
+
+# ===== 后台版专属 =====
+# 1 = 自动模拟 ⌘V 粘贴到光标（需开启"辅助功能"权限）
+# 0 = 仅复制到剪贴板，手动 ⌘V
+AUTO_PASTE=1
+
+# 静音多少秒后自动停录
+SILENCE_TAIL=1.5
+
+# 录音控制模式：
+# - USE_VAD=0（默认/推荐）: 纯 toggle 模式，按一下开，再按一下停，最稳
+# - USE_VAD=1: 启用静音检测自动停（环境足够安静时才好用）
+USE_VAD=0
+
+# 录音硬超时（秒），防止忘按停导致一直录
+MAX_REC_SECONDS=30
+
+# VAD 阈值（仅 USE_VAD=1 时生效）
+SILENCE_START_THRESHOLD="0.5%"
+SILENCE_STOP_THRESHOLD="6%"
+
+# ===== 热词词表（可选）=====
+# 文件不存在时使用脚本内置默认词表
+HOTWORDS_FILE="$HOME/.config/vinput_hotwords.txt"
