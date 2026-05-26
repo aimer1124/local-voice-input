@@ -1,5 +1,5 @@
 #!/bin/bash
-# vinput 一键安装脚本
+# local-voice-input 一键安装脚本（部署的 CLI 工具名为 vinput）
 # 用法: ./install.sh
 
 set -e

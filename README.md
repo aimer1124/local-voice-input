@@ -1,6 +1,8 @@
-# 🎙️ vinput — 本地 AI 语音 Prompt 输入器
+# 🎙️ local-voice-input — 本地 AI 语音 Prompt 输入器
 
 > **完全离线** 的程序员专用语音输入工具：按下快捷键说话 → Whisper 转写 → 本地 LLM 提炼意图 → 自动粘贴到光标位置。
+>
+> _命令行工具名: `vinput`_
 
 **100% 本地运行，音频不出网，无云端依赖，无账号注册。**
 
@@ -163,8 +165,8 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 ### 一键安装（推荐）
 
 ```bash
-git clone https://github.com/YOUR_NAME/vinput.git
-cd vinput
+git clone https://github.com/YOUR_NAME/local-voice-input.git
+cd local-voice-input
 ./install.sh
 ```
 

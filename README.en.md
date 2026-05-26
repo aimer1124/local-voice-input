@@ -1,6 +1,8 @@
-# 🎙️ vinput — Local AI Voice Prompt Input
+# 🎙️ local-voice-input — Local AI Voice Prompt Input
 
 > **Fully offline** voice-to-text tool for programmers: press a hotkey, speak, get cleaned-up text pasted at your cursor.
+>
+> _CLI tool name: `vinput`_
 
 **100% local. Audio never leaves your machine. No cloud, no accounts.**
 
@@ -135,8 +137,8 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 ### One-line install
 
 ```bash
-git clone https://github.com/YOUR_NAME/vinput.git
-cd vinput
+git clone https://github.com/YOUR_NAME/local-voice-input.git
+cd local-voice-input
 ./install.sh
 ```
 
