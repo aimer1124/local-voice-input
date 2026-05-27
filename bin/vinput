@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.1.8"
+VERSION="1.2.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
@@ -21,6 +21,7 @@ MODEL_PATH="${MODEL_PATH:-$WHISPER_DIR/ggml-large-v3-turbo-q5_0.bin}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:3b}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$CONFIG_DIR/vinput_hotwords.txt}"
+CORRECTIONS_FILE="${CORRECTIONS_FILE:-$CONFIG_DIR/vinput_corrections.tsv}"
 HUD_BIN="${HUD_BIN:-$WHISPER_DIR/hud}"
 
 # ── 输出工具（颜色 + 段落标题）─────────────────────────
@@ -300,6 +301,16 @@ cmd_setup() {
     for cand in "$root/config/vinput_hotwords.example.txt" "$(brew --prefix 2>/dev/null)/etc/local-voice-input/vinput_hotwords.example.txt"; do
         [ -f "$cand" ] && hot_src="$cand" && break
     done
+    local corr_src=""
+    for cand in "$root/config/vinput_corrections.example.tsv" "$(brew --prefix 2>/dev/null)/etc/local-voice-input/vinput_corrections.example.tsv"; do
+        [ -f "$cand" ] && corr_src="$cand" && break
+    done
+    if [ -n "$corr_src" ] && [ ! -f "$CORRECTIONS_FILE" ]; then
+        cp "$corr_src" "$CORRECTIONS_FILE"
+        ok "写入默认纠错表 ${CORRECTIONS_FILE}"
+    elif [ -f "$CORRECTIONS_FILE" ]; then
+        ok "已有纠错表    ${CORRECTIONS_FILE}（保留不覆盖）"
+    fi
     if [ -n "$hot_src" ] && [ ! -f "$HOTWORDS_FILE" ]; then
         cp "$hot_src" "$HOTWORDS_FILE"
         ok "写入默认热词  $HOTWORDS_FILE"
@@ -369,16 +380,168 @@ ${G}✓ 安装就绪${N}
 EOF
 }
 
+# ── corrections / add-correction / remove-correction (#18) ──
+# 谐音/同音纠错表（详见 config/vinput_corrections.example.tsv）。
+# TSV 一行一组：<正确><TAB><错1><TAB><错2>...，# 开头注释。
+
+_ensure_corrections_file() {
+    if [ ! -f "$CORRECTIONS_FILE" ]; then
+        mkdir -p "$(dirname "$CORRECTIONS_FILE")"
+        : > "$CORRECTIONS_FILE"
+    fi
+}
+
+cmd_corrections() {
+    if [ ! -f "$CORRECTIONS_FILE" ]; then
+        warn "纠错表不存在: $CORRECTIONS_FILE"
+        hint "vinput add-correction <对> <错>  追加一条"
+        hint "或 cp \"\$(brew --prefix)/etc/local-voice-input/vinput_corrections.example.tsv\" $CORRECTIONS_FILE"
+        return 0
+    fi
+    section "纠错表 $CORRECTIONS_FILE"
+    local rules=0 variants=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ''|'#'*) continue ;;
+        esac
+        IFS=$'\t' read -r correct rest <<< "$line"
+        [ -z "$correct" ] && continue
+        ((rules++))
+        local IFS=$'\t'
+        # shellcheck disable=SC2086
+        set -- $rest
+        unset IFS
+        local n_variants=$#
+        variants=$((variants + n_variants))
+        printf "  ${C}%s${N}  ←  " "$correct"
+        local sep=""
+        for w in "$@"; do
+            [ -z "$w" ] && continue
+            printf '%s%s' "$sep" "$w"
+            sep=" / "
+        done
+        printf '\n'
+    done < "$CORRECTIONS_FILE"
+    echo
+    ok "共 $rules 条规则、$variants 个错写变体"
+}
+
+cmd_add_correction() {
+    if [ $# -lt 2 ]; then
+        err "用法: vinput add-correction <正确写法> <错误写法>"
+        exit 2
+    fi
+    local correct="$1" wrong="$2"
+    _ensure_corrections_file
+
+    local found_line="" found_idx=0 idx=0 line c rest
+    while IFS= read -r line || [ -n "$line" ]; do
+        ((idx++))
+        case "$line" in
+            ''|'#'*) continue ;;
+        esac
+        IFS=$'\t' read -r c rest <<< "$line"
+        # 大小写不敏感比较 correct 字段
+        if [ "$(printf '%s' "$c" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$correct" | tr '[:upper:]' '[:lower:]')" ]; then
+            found_line="$line"
+            found_idx=$idx
+            break
+        fi
+    done < "$CORRECTIONS_FILE"
+
+    if [ -n "$found_line" ]; then
+        # 检查 wrong 是否已存在（只查 variants，跳过 correct 字段）
+        IFS=$'\t' read -r _c2 rest2 <<< "$found_line"
+        local have_wrong=0
+        local IFS=$'\t'
+        for w in $rest2; do
+            [ -z "$w" ] && continue
+            if [ "$(printf '%s' "$w" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$wrong" | tr '[:upper:]' '[:lower:]')" ]; then
+                have_wrong=1
+                break
+            fi
+        done
+        unset IFS
+        if [ "$have_wrong" = "1" ]; then
+            warn "已存在: ${correct} ← ${wrong}（跳过）"
+            return 0
+        fi
+        # 追加 wrong 到该行
+        awk -v ln="$found_idx" -v add="$wrong" 'NR==ln{print $0"\t"add; next} {print}' "$CORRECTIONS_FILE" > "$CORRECTIONS_FILE.tmp"
+        mv "$CORRECTIONS_FILE.tmp" "$CORRECTIONS_FILE"
+        ok "追加: $correct ← $wrong"
+    else
+        # 新建行
+        printf '%s\t%s\n' "$correct" "$wrong" >> "$CORRECTIONS_FILE"
+        ok "新增: $correct ← $wrong"
+    fi
+}
+
+cmd_remove_correction() {
+    if [ $# -lt 2 ]; then
+        err "用法: vinput remove-correction <正确写法> <错误写法>"
+        exit 2
+    fi
+    local correct="$1" wrong="$2"
+    [ ! -f "$CORRECTIONS_FILE" ] && { warn "纠错表不存在"; return 0; }
+
+    local target_lc
+    target_lc=$(printf '%s' "$correct" | tr '[:upper:]' '[:lower:]')
+    local wrong_lc
+    wrong_lc=$(printf '%s' "$wrong" | tr '[:upper:]' '[:lower:]')
+
+    local changed=0
+    : > "$CORRECTIONS_FILE.tmp"
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ''|'#'*) printf '%s\n' "$line" >> "$CORRECTIONS_FILE.tmp"; continue ;;
+        esac
+        IFS=$'\t' read -r c rest <<< "$line"
+        if [ "$(printf '%s' "$c" | tr '[:upper:]' '[:lower:]')" != "$target_lc" ]; then
+            printf '%s\n' "$line" >> "$CORRECTIONS_FILE.tmp"
+            continue
+        fi
+        # 过滤掉匹配的 wrong
+        local kept="$c"
+        local IFS=$'\t'
+        for w in $rest; do
+            [ -z "$w" ] && continue
+            if [ "$(printf '%s' "$w" | tr '[:upper:]' '[:lower:]')" = "$wrong_lc" ]; then
+                changed=1
+                continue
+            fi
+            kept="$kept"$'\t'"$w"
+        done
+        unset IFS
+        # 该行至少要保留 correct + 1 variant；否则整行删除
+        if [ "$kept" = "$c" ]; then
+            changed=1
+            continue
+        fi
+        printf '%s\n' "$kept" >> "$CORRECTIONS_FILE.tmp"
+    done < "$CORRECTIONS_FILE"
+    mv "$CORRECTIONS_FILE.tmp" "$CORRECTIONS_FILE"
+
+    if [ "$changed" = "1" ]; then
+        ok "已删除: $correct ← $wrong"
+    else
+        warn "未找到: $correct ← $wrong"
+    fi
+}
+
 # ── --help ────────────────────────────────────────────
 cmd_help() {
     cat <<EOF
 vinput — local-voice-input CLI ($VERSION)
 
 用法:
-  vinput setup           一键完成依赖安装/模型下载/脚本部署（首次安装后跑一次）
-  vinput --version       显示版本号
-  vinput --doctor        运行诊断检查（工具链 / 资源 / 运行时 / 麦克风）
-  vinput --help          显示此帮助
+  vinput setup                              一键完成依赖安装/模型下载/脚本部署（首次安装后跑一次）
+  vinput --version                          显示版本号
+  vinput --doctor                           运行诊断检查（工具链 / 资源 / 运行时 / 麦克风）
+  vinput corrections                        列出所有谐音纠错规则
+  vinput add-correction <对> <错>           追加一条纠错（自动去重）
+  vinput remove-correction <对> <错>        删除一条
+  vinput --help                             显示此帮助
 
 触发语音输入：
   通过 Raycast 绑定的快捷键（如 ⌘⇧Space）。本命令不会启动录音。
@@ -391,10 +554,13 @@ EOF
 
 # ── 路由 ──────────────────────────────────────────────
 case "${1:-help}" in
-    --version|-V|version)   cmd_version ;;
-    --doctor|doctor)        cmd_doctor ;;
-    --setup|setup)          cmd_setup ;;
-    --help|-h|help|"")      cmd_help ;;
+    --version|-V|version)         cmd_version ;;
+    --doctor|doctor)              cmd_doctor ;;
+    --setup|setup)                cmd_setup ;;
+    corrections)                  cmd_corrections ;;
+    add-correction)               shift; cmd_add_correction "$@" ;;
+    remove-correction)            shift; cmd_remove_correction "$@" ;;
+    --help|-h|help|"")            cmd_help ;;
     *)
         err "未知命令: $1"
         echo

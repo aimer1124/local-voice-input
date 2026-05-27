@@ -1,0 +1,33 @@
+# vinput 谐音/同音/形近字纠错表
+# 格式: <正确写法><TAB><错误写法1><TAB><错误写法2>...
+# 一行一组；# 开头为注释；空行忽略；匹配大小写不敏感（仅 ASCII 部分）。
+#
+# 应用顺序: Whisper 输出 → 本表替换 → LLM 整形。
+# 因此规则越精确越好 —— 短规则容易误伤（"东西" → "Dongxi" 这种千万别加）。
+#
+# 维护命令:
+#   vinput corrections                  列出全部
+#   vinput add-correction <对> <错>     追加一条（自动去重）
+#   vinput remove-correction <对> <错>  删除一条
+
+# ── 编程产品名（Whisper 中文模型常误识 ASR 词汇）─────
+Claude Code	Cloud Code	克劳德 Code	克劳德
+Whisper	微死婆	维斯帕	威斯柏
+Ollama	奥拉马	奥拉玛	欧拉马
+qwen2.5	全2.5	犬2.5	券2.5
+Raycast	Ray Cast	瑞凯斯特	雷卡斯
+Codex	Code X	克德克斯
+Cursor	Cursors	卡瑟	苦瑟
+
+# ── 常见技术词 ──────────────────────────────
+useEffect	use Effect	you Sefect	UseEffect
+useState	use State	UseState
+TypeScript	Typescript	Type script	type Script
+JavaScript	Javascript	java script
+GitHub	Github	git hub	git Hub
+PostgreSQL	Postgres SQL	post grace QL
+
+# ── 中文形近/同音 ───────────────────────────
+重构	中构	众构
+分支	分肢
+合并	核并	和并

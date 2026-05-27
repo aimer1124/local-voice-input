@@ -1,0 +1,1 @@
+在 React 项目里给 useEffect 加个 cleanup function，避免 memory leak。

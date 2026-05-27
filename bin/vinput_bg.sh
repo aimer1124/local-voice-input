@@ -28,6 +28,7 @@ SILENCE_START_THRESHOLD="${SILENCE_START_THRESHOLD:-0.5%}"
 SILENCE_STOP_THRESHOLD="${SILENCE_STOP_THRESHOLD:-6%}"
 MAX_REC_SECONDS="${MAX_REC_SECONDS:-30}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$HOME/.config/vinput_hotwords.txt}"
+CORRECTIONS_FILE="${CORRECTIONS_FILE:-$HOME/.config/vinput_corrections.tsv}"
 
 # Whisper 解码参数 — 任何一项设置为空字符串即跳过对应 flag
 #
@@ -70,6 +71,44 @@ HUD_BIN="${HUD_BIN:-$HOME/.whisper_models/hud}"
 export HUD_Y_PERCENT HUD_HEIGHT HUD_FONT_SIZE HUD_FONT_WEIGHT \
        HUD_CORNER_RADIUS HUD_MATERIAL HUD_WIDTH_MIN HUD_WIDTH_MAX
 
+# ──────────────────────────────────────────────────────────────
+# 谐音/同音纠错表（v1.2.0 #18）— 应用在 Whisper 输出之后、LLM 整形之前。
+#
+# 格式: <correct><TAB><wrong1><TAB><wrong2>...，# 开头注释。详见
+# config/vinput_corrections.example.tsv。
+#
+# 实现：把整张表编译成一个 sed 脚本（一条规则一个 s|wrong|correct|gI），单次 sed 调用
+# 处理整段文本。100 条规则 ~5ms on M1。
+# ──────────────────────────────────────────────────────────────
+apply_corrections() {
+    local text="$1"
+    local file="${CORRECTIONS_FILE:-$HOME/.config/vinput_corrections.tsv}"
+    [ ! -f "$file" ] && { printf '%s' "$text"; return; }
+
+    local sed_script="" line correct rest wrong c_esc w_esc
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ''|'#'*) continue ;;
+        esac
+        IFS=$'\t' read -r correct rest <<< "$line"
+        [ -z "$correct" ] && continue
+        c_esc=$(printf '%s' "$correct" | sed 's/[\\|&]/\\&/g')
+        local IFS=$'\t'
+        for wrong in $rest; do
+            [ -z "$wrong" ] && continue
+            w_esc=$(printf '%s' "$wrong" | sed 's/[\\|&]/\\&/g')
+            sed_script+="s|$w_esc|$c_esc|gI;"
+        done
+        unset IFS
+    done < "$file"
+
+    if [ -z "$sed_script" ]; then
+        printf '%s' "$text"
+    else
+        printf '%s' "$text" | sed "$sed_script"
+    fi
+}
+
 hud() {
     local msg="$1"
     local dur="${2:-2.0}"
@@ -85,6 +124,48 @@ hud() {
         osascript -e "display notification \"$msg\" with title \"vinput\"" &
     fi
 }
+
+# ──────────────────────────────────────────────────────────────
+# Test-only fast path (used by tests/asr/run.sh).
+# Skips lock/HUD/rec/pbcopy: feed a WAV, get the raw Whisper output (after
+# UTF-8 rescue, before LLM cleaning) on stdout. Exits non-zero on empty.
+#
+# Keep this branch in sync with the production whisper-cli invocation below —
+# both should call the same flags + prompt. The regression suite depends on it.
+# ──────────────────────────────────────────────────────────────
+if [ "${1:-}" = "--test-transcribe" ] && [ -n "${2:-}" ]; then
+    test_wav="$2"
+    [ ! -f "$test_wav" ] && { echo "vinput_bg: no such wav: $test_wav" >&2; exit 2; }
+
+    TMPDIR_RUN=$(mktemp -d -t vinput-test.XXXXXX)
+    TXT_PATH="$TMPDIR_RUN/voice"
+    trap 'rm -rf "$TMPDIR_RUN"' EXIT
+
+    if [ -f "$HOTWORDS_FILE" ]; then
+        HOTWORDS=$(cat "$HOTWORDS_FILE")
+    else
+        HOTWORDS=""
+    fi
+
+    WHISPER_ARGS=(-t "$WHISPER_THREADS" -m "$MODEL_PATH" -f "$test_wav" -l "$WHISPER_LANG")
+    [ -n "$WHISPER_BEAM_SIZE" ]       && WHISPER_ARGS+=(--beam-size "$WHISPER_BEAM_SIZE")
+    [ -n "$WHISPER_TEMPERATURE" ]     && WHISPER_ARGS+=(--temperature "$WHISPER_TEMPERATURE")
+    [ -n "$WHISPER_TEMPERATURE_INC" ] && WHISPER_ARGS+=(--temperature-inc "$WHISPER_TEMPERATURE_INC")
+    [ -n "$WHISPER_NO_SPEECH_THOLD" ] && WHISPER_ARGS+=(--no-speech-thold "$WHISPER_NO_SPEECH_THOLD")
+    [ -n "$WHISPER_LOGPROB_THOLD" ]   && WHISPER_ARGS+=(--logprob-thold "$WHISPER_LOGPROB_THOLD")
+    WHISPER_ARGS+=(--prompt "$HOTWORDS" -otxt -of "$TXT_PATH" -nt -np)
+
+    whisper-cli "${WHISPER_ARGS[@]}" > /dev/null 2>&1 || true
+
+    RAW_RESULT=$(LC_ALL=C sed 's/^[[:space:]]*//; s/[[:space:]]*$//' "${TXT_PATH}.txt" 2>/dev/null || echo "")
+    if ! echo "$RAW_RESULT" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+        RAW_RESULT=$(echo "$RAW_RESULT" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || echo "")
+    fi
+
+    RAW_RESULT=$(apply_corrections "$RAW_RESULT")
+    printf '%s\n' "$RAW_RESULT"
+    exit 0
+fi
 
 LOCK_DIR="/tmp/vinput.lock.d"
 REC_PID_FILE="$LOCK_DIR/rec.pid"
@@ -231,6 +312,11 @@ if [ -z "$RAW_RESULT" ] || [ ${#RAW_RESULT} -le 2 ]; then
     hud "❌ 未识别到有效语音" 3
     exit 1
 fi
+
+# 谐音/同音纠错（#18）：在 LLM 整形前先打用户自维护的纠错表。
+# Whisper 中文模型对英文产品名（Claude/Cloud、Cursor/Cursors）极易混淆，
+# 这些 LLM 也救不回来（语义上下文一样），只能靠用户级映射表根治。
+RAW_RESULT=$(apply_corrections "$RAW_RESULT")
 
 # 短文本阈值（v1.1.3）：用 wc -m 数字符数（中文 1 字 = 1），不再用字节数。
 # 默认 8 字 ≈ 中文短指令的下限（"删除多余文件" 6 字仍走 LLM，"取消" 2 字跳过）。

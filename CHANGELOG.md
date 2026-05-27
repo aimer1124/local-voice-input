@@ -12,6 +12,51 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.2.0] — 2026-05-27
+
+Minor — adds the **regression test suite** (#24) and **phonetic correction
+table** (#18). First release where ASR changes are gated by a reproducible
+benchmark instead of vibes.
+
+### Added
+- **`tests/asr/` regression suite** — 6 fixed TTS samples (Tingting voice),
+  Levenshtein-based CER, per-sample budget table, single-command runner:
+  ```
+  bash tests/asr/run.sh
+  ```
+  Run this before any tag. The harness shells through a new
+  `vinput_bg.sh --test-transcribe <wav>` mode, so the production code path
+  is what's actually measured (not a parallel re-implementation that can
+  drift). Zero pip dependency — CER is a 30-line pure-stdlib script.
+  Acceptance criteria from #24 met: 6 samples, per-sample CER ceiling,
+  README "如何贡献样本" section. CI gate deferred to a follow-up (the
+  baseline needs to settle in user hands first).
+- **Phonetic correction table (#18)** — `~/.config/vinput_corrections.tsv`
+  TSV (one row per correct form, tab-separated wrong variants), applied
+  after Whisper / before LLM cleaning. Case-insensitive ASCII matching,
+  single sed invocation for the whole table (~5ms for 100 rules).
+  Ships with 16 seeded rules (Claude Code, Whisper, Ollama, qwen2.5,
+  useEffect, …) and three subcommands:
+  ```
+  vinput corrections                     # list all
+  vinput add-correction <对> <错>         # append (auto-dedupe)
+  vinput remove-correction <对> <错>
+  ```
+  Validated against the new regression suite: 4 of 5 imperfect samples
+  dropped to CER 0 once the table was loaded.
+
+### Notes
+- **Format choice (TSV instead of YAML)** — the issue spec'd YAML, but
+  shipping YAML would mean adding `yq` as a brew dep or a python dep
+  (PyYAML) for ~50 lines of value. TSV gives the same data shape with
+  pure bash parsing. If/when we move to a richer schema (regex variants,
+  per-rule weights), revisit.
+- The regression suite caught two real defects on its first run before
+  #18 even landed: `Claude Code → Cloud Code` and `重构 → 中构`. Both
+  are now fixed by the default correction table.
+
+---
+
 ## [1.1.8] — 2026-05-27
 
 Hotfix — same bug class as v1.1.5, on a different line.
@@ -261,7 +306,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.8...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/aimer1124/local-voice-input/compare/v1.1.8...v1.2.0
 [1.1.8]: https://github.com/aimer1124/local-voice-input/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/aimer1124/local-voice-input/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/aimer1124/local-voice-input/compare/v1.1.5...v1.1.6

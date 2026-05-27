@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.1.8"
+VERSION="1.2.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -135,6 +135,10 @@ fi
 if [ ! -f "$CONFIG_DIR/vinput_hotwords.txt" ]; then
     cp "$REPO_DIR/config/vinput_hotwords.example.txt" "$CONFIG_DIR/vinput_hotwords.txt"
     ok "已写入默认热词 $CONFIG_DIR/vinput_hotwords.txt"
+fi
+if [ ! -f "$CONFIG_DIR/vinput_corrections.tsv" ]; then
+    cp "$REPO_DIR/config/vinput_corrections.example.tsv" "$CONFIG_DIR/vinput_corrections.tsv"
+    ok "已写入默认纠错表 $CONFIG_DIR/vinput_corrections.tsv"
 fi
 
 mkdir -p "$RAYCAST_DIR"

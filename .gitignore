@@ -27,3 +27,6 @@ config/vinput_hotwords.txt
 *.swp
 *~
 .venv-tools/
+
+# 回归测试音频（由 tests/asr/generate.sh 重新生成）
+tests/asr/samples/*.wav

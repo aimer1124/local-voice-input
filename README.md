@@ -393,9 +393,24 @@ ollama pull qwen2.5:1.5b
 
 ---
 
+## 🧪 ASR 回归测试
+
+修改 `bin/vinput_bg.sh`、Whisper 参数或 `config/*` 之前，**先跑回归套件**：
+
+```bash
+bash tests/asr/run.sh
+```
+
+6 条固定 TTS 音频（不同语速 / 信噪比 / 中英文混合）+ CER 预算 + 退出码 gate。详见
+[tests/asr/README.md](./tests/asr/README.md)。
+
+> 为什么：v1.1.3 → v1.1.7 四个 hotfix 都是「改 ASR 参数没回归」的产物。这套件就是为了
+> 防止同类事故再发生。
+
 ## 🤝 贡献
 
 欢迎 PR / Issue。建议方向：
+- 给回归套件 [tests/asr/](./tests/asr/) 提样本（真人录音、方言、噪声场景）
 - Linux/Windows 移植（替换 Raycast、osascript、HUD）
 - 流式识别（whisper-streaming / faster-whisper）
 - 不依赖剪贴板的直接注入（用 CGEventPost 输入 Unicode）

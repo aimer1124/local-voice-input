@@ -1,0 +1,7 @@
+# id	voice	rate	post_fx	cer_max	note
+01-zh-tech-basic	Tingting	180	none	0.15	clean baseline
+02-zh-products	Tingting	175	none	0.20	proper-noun heavy (Cursor/Codex/Raycast)
+03-zh-quiet	Tingting	180	gain -20	0.25	quiet speaker — tests gain stage
+04-zh-fast	Tingting	260	none	0.20	fast speech (260 wpm)
+05-zh-mixed-en	Tingting	180	none	0.25	zh+en mixed (React/useEffect/memory leak)
+06-silence	-	-	silence	1.00	pure silence — must yield empty result
