@@ -36,6 +36,20 @@ WHISPER_TEMPERATURE_INC="${WHISPER_TEMPERATURE_INC:-0.2}"
 WHISPER_NO_SPEECH_THOLD="${WHISPER_NO_SPEECH_THOLD:-0.5}"
 WHISPER_LOGPROB_THOLD="${WHISPER_LOGPROB_THOLD:--0.8}"   # 负值；低于此 logprob 的段会被丢
 
+# 动态 prompt 上下文（v1.1.4）— 拼接最近成功转写作为 Whisper 短期记忆
+USE_RECENT_PROMPT="${USE_RECENT_PROMPT:-1}"
+RECENT_PROMPT_COUNT="${RECENT_PROMPT_COUNT:-5}"
+RECENT_PROMPT_FILE="${RECENT_PROMPT_FILE:-$HOME/.cache/vinput/recent.txt}"
+# 上下文上限（字符数）。whisper.cpp 的 prompt token 上限 ≈ 224，按中文 1 字 = 1.5 token 估算
+RECENT_PROMPT_MAX_CHARS="${RECENT_PROMPT_MAX_CHARS:-280}"
+
+# SoX 录音预处理（v1.1.4 #20）— 提升任意场景下 Whisper 输入质量
+USE_SOX_PREPROCESS="${USE_SOX_PREPROCESS:-1}"
+SOX_HIGHPASS="${SOX_HIGHPASS:-80}"     # 切掉风扇 / 街道低频嗡嗡声
+SOX_LOWPASS="${SOX_LOWPASS:-8000}"     # 切掉高频白噪 + 嘶嘶声
+SOX_NORM_DB="${SOX_NORM_DB:--3}"       # 峰值归一化到 -3dB（替代旧的 gain -3 衰减）
+REC_WARMUP_MS="${REC_WARMUP_MS:-150}"  # rec 启动后等待 buffer 就绪，避免首字丢失
+
 # 屏幕中央 HUD（替代右上角通知）
 HUD_BIN="${HUD_BIN:-$HOME/.whisper_models/hud}"
 
@@ -108,19 +122,49 @@ else
     HOTWORDS="使用 Whisper 和 Ollama 做语音转写，用 qwen2.5 整形 prompt。常用工具 Raycast、Claude、Cursor、Codex、Git、GitHub。"
 fi
 
-afplay /System/Library/Sounds/Pop.aiff 2>/dev/null &
-hud "🎙️ 录音中... (再按快捷键停止)" 60
+# 动态 prompt 拼接（v1.1.4 #17）：最近成功转写做 Whisper 短期记忆。
+# 顺序：最近 → 远 → 热词。超出 RECENT_PROMPT_MAX_CHARS 截最旧的。
+if [ "$USE_RECENT_PROMPT" = "1" ] && [ -f "$RECENT_PROMPT_FILE" ]; then
+    # tail -n 取最后 N 条，再倒序成「最近在前」
+    RECENT_CTX=$(tail -n "$RECENT_PROMPT_COUNT" "$RECENT_PROMPT_FILE" 2>/dev/null \
+                  | awk 'NF' \
+                  | tail -r 2>/dev/null \
+                  | head -c "$RECENT_PROMPT_MAX_CHARS")
+    if [ -n "$RECENT_CTX" ]; then
+        HOTWORDS="$RECENT_CTX
+$HOTWORDS"
+    fi
+fi
+
+# 组装 SoX 后处理链（v1.1.4 #20）
+# 顺序：channels/rate（必须靠前）→ highpass → lowpass → norm
+if [ "$USE_SOX_PREPROCESS" = "1" ]; then
+    SOX_TAIL=(channels 1 rate 16000)
+    [ -n "$SOX_HIGHPASS" ] && SOX_TAIL+=(highpass "$SOX_HIGHPASS")
+    [ -n "$SOX_LOWPASS" ]  && SOX_TAIL+=(lowpass "$SOX_LOWPASS")
+    [ -n "$SOX_NORM_DB" ]  && SOX_TAIL+=(norm "$SOX_NORM_DB")
+else
+    # 兼容老行为：仅必要的下采样 + 固定 -3dB 衰减
+    SOX_TAIL=(channels 1 rate 16000 gain -3)
+fi
 
 if [ "$USE_VAD" = "1" ]; then
     rec -q -c 1 -r 48000 -b 16 "$AUDIO_PATH" \
         silence 1 0.1 "$SILENCE_START_THRESHOLD" 1 "$SILENCE_TAIL" "$SILENCE_STOP_THRESHOLD" \
-        channels 1 rate 16000 gain -3 &
+        "${SOX_TAIL[@]}" &
 else
     rec -q -c 1 -r 48000 -b 16 "$AUDIO_PATH" \
-        channels 1 rate 16000 gain -3 &
+        "${SOX_TAIL[@]}" &
 fi
 REC_PID=$!
 echo "$REC_PID" > "$REC_PID_FILE"
+
+# Warmup：等 rec 真正打开音频设备后再给用户「开始」信号，避免首字被 buffer 抖动吃掉。
+if [ "$REC_WARMUP_MS" -gt 0 ] 2>/dev/null; then
+    sleep "$(awk "BEGIN {print $REC_WARMUP_MS / 1000}")"
+fi
+afplay /System/Library/Sounds/Pop.aiff 2>/dev/null &
+hud "🎙️ 录音中... (再按快捷键停止)" 60
 
 ( sleep "$MAX_REC_SECONDS" && kill -INT "$REC_PID" 2>/dev/null ) &
 GUARD_PID=$!
@@ -200,6 +244,18 @@ printf '%s' "$CLEANED_RESULT" | pbcopy
 
 if [ "$AUTO_PASTE" = "1" ]; then
     osascript -e 'tell application "System Events" to keystroke "v" using command down'
+fi
+
+# 写入最近转写缓冲（v1.1.4 #17）— 下次启动时拼为 Whisper prompt 上下文。
+# 用 RAW_RESULT（未经 LLM 改写）作 ASR 记忆，避免 LLM 风格污染上下文。
+if [ "$USE_RECENT_PROMPT" = "1" ] && [ -n "$RAW_RESULT" ]; then
+    mkdir -p "$(dirname "$RECENT_PROMPT_FILE")"
+    # append + 仅保留最后 N 条
+    printf '%s\n' "$RAW_RESULT" >> "$RECENT_PROMPT_FILE"
+    if [ "$(wc -l < "$RECENT_PROMPT_FILE" 2>/dev/null)" -gt "$RECENT_PROMPT_COUNT" ]; then
+        tail -n "$RECENT_PROMPT_COUNT" "$RECENT_PROMPT_FILE" > "${RECENT_PROMPT_FILE}.tmp" \
+            && mv "${RECENT_PROMPT_FILE}.tmp" "$RECENT_PROMPT_FILE"
+    fi
 fi
 
 hud "✓ 已完成" 1.2

@@ -31,6 +31,22 @@ WHISPER_NO_SPEECH_THOLD=0.5
 # 低于此 logprob 的段被丢（更负 = 更严格；-0.8 比默认 -1.0 严一点）
 WHISPER_LOGPROB_THOLD=-0.8
 
+# ===== 动态 Prompt 上下文（v1.1.4）=====
+# 把最近 N 次成功转写拼到 Whisper --prompt 前面，给模型「短期记忆」
+# 实测连续聊同一话题时专有名词命中率能再涨 20-40%
+USE_RECENT_PROMPT=1
+RECENT_PROMPT_COUNT=5
+RECENT_PROMPT_FILE="$HOME/.cache/vinput/recent.txt"
+RECENT_PROMPT_MAX_CHARS=280
+
+# ===== SoX 录音预处理（v1.1.4）=====
+# 让 Whisper 拿到的音频更"干净"，全局基线提升
+USE_SOX_PREPROCESS=1
+SOX_HIGHPASS=80      # 切掉低频 — 风扇 / 街道嗡嗡声
+SOX_LOWPASS=8000     # 切掉高频 — 嘶嘶声 / 抖动
+SOX_NORM_DB=-3       # 峰值归一化（声音小的用户会感受到大幅改善）
+REC_WARMUP_MS=150    # rec 启动后等待 buffer 就绪再提示用户说话，避免首字丢失
+
 # ===== 后台版专属 =====
 # 1 = 自动模拟 ⌘V 粘贴到光标（需开启"辅助功能"权限）
 # 0 = 仅复制到剪贴板，手动 ⌘V

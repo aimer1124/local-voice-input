@@ -12,6 +12,37 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.1.4] — 2026-05-27
+
+ASR Quality Round 2 — dynamic context + cleaner audio pipeline.
+
+### Added
+- **Dynamic prompt context** — the last `RECENT_PROMPT_COUNT` (default 5)
+  successful transcriptions are cached to `~/.cache/vinput/recent.txt`
+  and prepended to Whisper's `--prompt` on the next run. Gives the
+  decoder short-term memory across calls, which significantly improves
+  proper-noun recognition on repeated-topic conversations. Total prompt
+  is capped at `RECENT_PROMPT_MAX_CHARS` (default 280). All
+  configurable via `vinput.conf`. (closes #17)
+- **SoX recording preprocessing** — `highpass 80`, `lowpass 8000`,
+  and peak normalization (`norm -3dB`, replaces the old `gain -3`
+  attenuation) now clean up the audio before it reaches Whisper.
+  Quiet speakers benefit the most: peak normalization amplifies them
+  to a target level instead of attenuating. All filter params
+  overridable via `SOX_HIGHPASS`, `SOX_LOWPASS`, `SOX_NORM_DB`. Master
+  switch: `USE_SOX_PREPROCESS=1`. (closes #20)
+- **Record-buffer warmup** — `REC_WARMUP_MS=150` (default) delays the
+  "start" cue + HUD until `rec` has opened the audio device, so the
+  first syllable is no longer at risk of being lost to buffer
+  initialization jitter.
+
+### Notes
+- No new dependencies. Pure config + shell additions.
+- Old `gain -3` behavior is preserved when `USE_SOX_PREPROCESS=0` for
+  users who want exactly the v1.1.3 audio path back.
+
+---
+
 ## [1.1.3] — 2026-05-27
 
 ASR decode tuning patch — first concrete wins on transcription accuracy.
@@ -130,7 +161,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.4...HEAD
+[1.1.4]: https://github.com/aimer1124/local-voice-input/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/aimer1124/local-voice-input/compare/v1.1.1...v1.1.3
 [1.1.1]: https://github.com/aimer1124/local-voice-input/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/aimer1124/local-voice-input/compare/v1.0.2...v1.1.0
