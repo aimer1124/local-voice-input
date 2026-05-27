@@ -12,6 +12,25 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.1.1] — 2026-05-27
+
+Bootstrap polish — prepares the ground for the Homebrew tap.
+
+### Added
+- **`vinput setup`** subcommand — single-shot bootstrap that installs deps,
+  downloads the Whisper model, symlinks runtime scripts into
+  `~/.whisper_models/`, copies the Raycast template, and warms up Ollama.
+  Designed to run after `brew install` (works equally well from a git clone).
+- Symlink-resolution helper so `vinput` correctly locates its resource root
+  whether invoked from `prefix/bin/vinput` (Homebrew) or `repo/bin/vinput`
+  (git clone).
+
+### Changed
+- `install.sh` version pinned to 1.1.1 so the pre-built HUD fallback URL
+  matches the release asset.
+
+---
+
 ## [1.1.0] — 2026-05-27
 
 UX polish milestone — demo, diagnostics, configurable HUD.
@@ -84,7 +103,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/aimer1124/local-voice-input/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/aimer1124/local-voice-input/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/aimer1124/local-voice-input/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/aimer1124/local-voice-input/compare/v1.0.0...v1.0.1
