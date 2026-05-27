@@ -4,6 +4,9 @@
 
 set -e
 
+VERSION="1.0.0"
+GITHUB_REPO="aimer1124/local-voice-input"
+
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 WHISPER_DIR="$HOME/.whisper_models"
 CONFIG_DIR="$HOME/.config"
@@ -12,6 +15,7 @@ RAYCAST_DIR="$HOME/.config/raycast-scripts"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
 OLLAMA_MODEL="qwen2.5:3b"
+HUD_RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}/hud"
 
 # ── 颜色输出 ─────────────────────────────────────────
 GREEN='\033[0;32m'
@@ -89,15 +93,28 @@ else
     ok "Whisper 模型下载完成"
 fi
 
-# ── 6. 编译 HUD ──────────────────────────────────────
-step "6/8 编译屏幕中央 HUD"
+# ── 6. 准备 HUD（优先编译，无 swiftc 时下载预编译）─────
+step "6/8 准备屏幕中央 HUD"
 
-if ! command -v swiftc &> /dev/null; then
-    err "未检测到 swiftc，请运行 xcode-select --install 后重试"
-    exit 1
+HUD_PATH="$WHISPER_DIR/hud"
+if command -v swiftc &> /dev/null; then
+    swiftc -O "$REPO_DIR/src/hud.swift" -o "$HUD_PATH"
+    ok "HUD 从源码编译完成"
+else
+    warn "未检测到 swiftc，下载 v${VERSION} 预编译版本..."
+    if curl -fL --progress-bar -o "${HUD_PATH}.tmp" "$HUD_RELEASE_URL"; then
+        mv "${HUD_PATH}.tmp" "$HUD_PATH"
+        chmod +x "$HUD_PATH"
+        # 清除 Gatekeeper 隔离属性（从网络下载的二进制默认会被拦截）
+        xattr -d com.apple.quarantine "$HUD_PATH" 2>/dev/null || true
+        ok "HUD 预编译版本下载完成"
+    else
+        rm -f "${HUD_PATH}.tmp"
+        err "HUD 下载失败。请安装 Xcode Command Line Tools 后重试："
+        err "    xcode-select --install"
+        exit 1
+    fi
 fi
-swiftc -O "$REPO_DIR/src/hud.swift" -o "$WHISPER_DIR/hud"
-ok "HUD 编译完成"
 
 # ── 7. 部署脚本 ──────────────────────────────────────
 step "7/8 部署脚本与配置"
