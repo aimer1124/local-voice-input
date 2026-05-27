@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.1.4"
+VERSION="1.1.5"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
@@ -292,7 +292,7 @@ cmd_setup() {
         cp "$conf_src" "$CONFIG_FILE"
         ok "写入默认配置  $CONFIG_FILE"
     elif [ -f "$CONFIG_FILE" ]; then
-        ok "已有配置      $CONFIG_FILE（保留不覆盖）"
+        ok "已有配置      ${CONFIG_FILE}（保留不覆盖）"
     else
         warn "未找到配置模板，跳过"
     fi
@@ -328,7 +328,7 @@ cmd_setup() {
     if ollama list 2>/dev/null | grep -q "$OLLAMA_MODEL"; then
         ok "$OLLAMA_MODEL 已就绪"
     else
-        warn "拉取 $OLLAMA_MODEL（约 2GB）"
+        warn "拉取 ${OLLAMA_MODEL}（约 2GB）"
         ollama pull "$OLLAMA_MODEL"
     fi
     # 预热

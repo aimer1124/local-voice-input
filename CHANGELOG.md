@@ -12,6 +12,19 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.1.5] — 2026-05-27
+
+Critical patch — `vinput setup` failed on brew install with `unbound variable`.
+
+### Fixed
+- `cmd_setup` had `$CONFIG_FILE（保留不覆盖）` and `$OLLAMA_MODEL（约 2GB）`
+  where the Chinese full-width `（` was treated as part of the variable name
+  under `set -u`, crashing setup at step 4/6 (config files) or 6/6 (Ollama).
+  Now uses `${VAR}` braces. Affects everyone who ran `brew install
+  local-voice-input` and tried `vinput setup`.
+
+---
+
 ## [1.1.4] — 2026-05-27
 
 ASR Quality Round 2 — dynamic context + cleaner audio pipeline.
@@ -161,7 +174,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.4...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.5...HEAD
+[1.1.5]: https://github.com/aimer1124/local-voice-input/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/aimer1124/local-voice-input/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/aimer1124/local-voice-input/compare/v1.1.1...v1.1.3
 [1.1.1]: https://github.com/aimer1124/local-voice-input/compare/v1.1.0...v1.1.1
