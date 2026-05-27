@@ -170,7 +170,26 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
 ## 📦 安装
 
-### 一键安装（推荐）
+### Homebrew Tap（推荐 · v1.1.1+）
+
+```bash
+brew tap aimer1124/tap
+brew install local-voice-input
+vinput setup
+```
+
+`vinput setup` 是 Homebrew 包装的"二段式"补全 —— `brew install` 只负责把脚本和 HUD 二进制部署到 `libexec/`，下面这些会在 `vinput setup` 里完成：
+
+1. `brew install sox jq whisper-cpp ollama`（已存在则跳过）
+2. 下载 Whisper `large-v3-turbo-q5_0` 模型（~547MB）
+3. 把 `vinput / vinput.sh / vinput_bg.sh / hud` 软链到 `~/.whisper_models/`
+4. 写入默认配置 `~/.config/vinput.conf` + 热词词表
+5. 部署 Raycast 命令脚本到 `~/.config/raycast-scripts/`
+6. 启动 Ollama 服务 + 拉取 `qwen2.5:3b`（~2GB）+ 预热
+
+升级：`brew upgrade local-voice-input`（脚本是 symlink，自动跟随版本）。
+
+### 源码安装（开发者 / 不想用 brew）
 
 ```bash
 git clone https://github.com/aimer1124/local-voice-input.git
@@ -178,15 +197,7 @@ cd local-voice-input
 ./install.sh
 ```
 
-`install.sh` 会自动完成：
-1. 检查 Homebrew
-2. `brew install sox jq whisper-cpp ollama`
-3. `brew install --cask raycast`
-4. 启动 Ollama 服务 + 拉取 `qwen2.5:3b`（~2GB）
-5. 下载 Whisper `large-v3-turbo-q5_0` 模型（~547MB）
-6. 编译 Swift HUD 二进制
-7. 部署脚本到 `~/.whisper_models/`、配置到 `~/.config/`
-8. 预热 Ollama 模型
+`install.sh` 走的是历史路径：自动检查 Homebrew → `brew install` 依赖 → `brew install --cask raycast` → 下载 Whisper 模型 → 编译 / 下载 HUD 二进制 → 复制脚本到 `~/.whisper_models/` → 预热 Ollama。和 `vinput setup` 等价，只是不依赖 brew tap。
 
 ### 手动配置（自动化无法覆盖的部分）
 

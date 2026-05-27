@@ -142,7 +142,26 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
 ## 📦 Installation
 
-### One-line install
+### Homebrew Tap (recommended · v1.1.1+)
+
+```bash
+brew tap aimer1124/tap
+brew install local-voice-input
+vinput setup
+```
+
+`brew install` only deploys scripts and the HUD binary to `libexec/`. The follow-up `vinput setup` is the bootstrap step that:
+
+1. Installs `sox`, `jq`, `whisper-cpp`, `ollama` via brew (skips if present)
+2. Downloads Whisper `large-v3-turbo-q5_0` (~547MB)
+3. Symlinks `vinput / vinput.sh / vinput_bg.sh / hud` into `~/.whisper_models/`
+4. Writes default config `~/.config/vinput.conf` + hotwords list
+5. Copies the Raycast command script to `~/.config/raycast-scripts/`
+6. Starts the Ollama service, pulls `qwen2.5:3b` (~2GB), pre-warms it
+
+Upgrades: `brew upgrade local-voice-input` (the scripts are symlinks, so version bumps land instantly).
+
+### From source (developer / no brew tap)
 
 ```bash
 git clone https://github.com/aimer1124/local-voice-input.git
@@ -150,15 +169,7 @@ cd local-voice-input
 ./install.sh
 ```
 
-The installer handles:
-1. Homebrew check
-2. `brew install sox jq whisper-cpp ollama`
-3. `brew install --cask raycast`
-4. Start Ollama + pull `qwen2.5:3b` (~2GB)
-5. Download Whisper `large-v3-turbo-q5_0` (~547MB)
-6. Compile Swift HUD
-7. Deploy scripts to `~/.whisper_models/`, config to `~/.config/`
-8. Pre-warm Ollama
+`install.sh` covers the same ground as `vinput setup` but without going through the brew tap: it installs deps with `brew install` directly, downloads the Whisper model, compiles or downloads the HUD binary, copies scripts to `~/.whisper_models/`, and warms up Ollama.
 
 ### Manual steps (cannot be automated)
 
