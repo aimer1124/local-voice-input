@@ -96,6 +96,27 @@ gh release create vX.Y.Z \
 # 3. CI 约 20 秒后自动 build hud + hud.sha256 并上传
 ```
 
+## 🎬 贡献演示 GIF
+
+README 顶部的演示 GIF 由 [`scripts/make-demo-gif.sh`](./scripts/make-demo-gif.sh) 处理压缩。完整工作流程：
+
+1. 用 macOS 自带 **⇧⌘5** 录屏（"Record Selected Portion"），框选 1200×675 区域
+2. 在录制范围里完整演示 vinput：
+   - 把光标点进文本框
+   - 按 ⌘⇧Space → 等 Pop 音 → 说一句话（如"帮我写一个 Python 函数读取 CSV 然后过滤掉空行"）
+   - 再按 ⌘⇧Space → 等 Tink 音 → HUD 切换 → 文字自动出现
+3. 停止录制，把生成的 mov 文件移动到 `/tmp/demo.mov`
+4. 跑转换脚本：
+   ```bash
+   ./scripts/make-demo-gif.sh
+   ```
+5. 输出 `assets/demo.gif`，自动校验大小 ≤ 5MB
+6. 大了就调参重跑：
+   ```bash
+   FPS=10 WIDTH=900 QUALITY=70 ./scripts/make-demo-gif.sh
+   ```
+7. 满意后 commit `assets/demo.gif` 并把 README 顶部加上 `![demo](./assets/demo.gif)`
+
 ## 🐛 报告 Bug
 
 请通过 [GitHub Issues](https://github.com/aimer1124/local-voice-input/issues/new/choose) 报告 bug。issue 模板会要求你提供：
@@ -183,3 +204,24 @@ gh release create vX.Y.Z \
     --target main
 # CI uploads hud + hud.sha256 within ~20s
 ```
+
+### Contributing the demo GIF
+
+The README demo GIF is processed by [`scripts/make-demo-gif.sh`](./scripts/make-demo-gif.sh). Workflow:
+
+1. Use macOS **⇧⌘5** to record (Record Selected Portion), 1200×675 region recommended
+2. Inside the recorded area, perform a full demo:
+   - Click into a text field
+   - Press ⌘⇧Space → wait for Pop sound → speak a sentence
+   - Press ⌘⇧Space again → wait for Tink → HUD transitions → text appears
+3. Stop recording, move the generated mov to `/tmp/demo.mov`
+4. Run the converter:
+   ```bash
+   ./scripts/make-demo-gif.sh
+   ```
+5. Output goes to `assets/demo.gif` (auto-validated ≤ 5MB)
+6. If too large, re-run with stricter params:
+   ```bash
+   FPS=10 WIDTH=900 QUALITY=70 ./scripts/make-demo-gif.sh
+   ```
+7. Commit `assets/demo.gif` and add `![demo](./assets/demo.gif)` to README top
