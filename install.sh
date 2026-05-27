@@ -121,8 +121,9 @@ step "7/8 部署脚本与配置"
 
 cp "$REPO_DIR/bin/vinput.sh" "$WHISPER_DIR/vinput.sh"
 cp "$REPO_DIR/bin/vinput_bg.sh" "$WHISPER_DIR/vinput_bg.sh"
-chmod +x "$WHISPER_DIR/vinput.sh" "$WHISPER_DIR/vinput_bg.sh"
-ok "vinput.sh / vinput_bg.sh 部署完成"
+cp "$REPO_DIR/bin/vinput" "$WHISPER_DIR/vinput"
+chmod +x "$WHISPER_DIR/vinput.sh" "$WHISPER_DIR/vinput_bg.sh" "$WHISPER_DIR/vinput"
+ok "vinput.sh / vinput_bg.sh / vinput 部署完成"
 
 mkdir -p "$CONFIG_DIR"
 if [ ! -f "$CONFIG_DIR/vinput.conf" ]; then
@@ -169,5 +170,13 @@ cat <<'EOF'
    - 给 "🎙️ 语音输入" 命令绑快捷键（推荐 ⌘⇧Space）
 
 完成后，按你设的快捷键即可开始使用！
+
+🛠️  CLI 工具（可选）：
+   把下面这行加到 ~/.zshrc 或 ~/.bashrc，就能在终端里跑 vinput 诊断：
+       alias vinput="$HOME/.whisper_models/vinput"
+
+   常用命令：
+       vinput --doctor    # 一键诊断（工具链 / 资源 / 麦克风测试）
+       vinput --version   # 查看版本
 ═══════════════════════════════════════════════════════════
 EOF

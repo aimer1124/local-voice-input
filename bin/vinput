@@ -1,0 +1,228 @@
+#!/bin/bash
+# vinput — CLI 入口，提供 --version / --doctor 等元命令
+#
+# 注意：实际的语音输入由 Raycast 触发 vinput_bg.sh，本脚本不会触发录音。
+# 这里只处理诊断和版本类查询，方便用户在终端里排错。
+
+set -u
+
+VERSION="1.1.0-dev"
+GITHUB_REPO="aimer1124/local-voice-input"
+
+# ── 默认路径（可被 ~/.config/vinput.conf 覆盖）────────────
+WHISPER_DIR="$HOME/.whisper_models"
+CONFIG_DIR="$HOME/.config"
+CONFIG_FILE="$CONFIG_DIR/vinput.conf"
+[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+
+MODEL_PATH="${MODEL_PATH:-$WHISPER_DIR/ggml-large-v3-turbo-q5_0.bin}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:3b}"
+OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
+HOTWORDS_FILE="${HOTWORDS_FILE:-$CONFIG_DIR/vinput_hotwords.txt}"
+HUD_BIN="${HUD_BIN:-$WHISPER_DIR/hud}"
+
+# ── 输出工具（颜色 + 段落标题）─────────────────────────
+G=$'\033[0;32m'; Y=$'\033[1;33m'; R=$'\033[0;31m'; C=$'\033[0;36m'; N=$'\033[0m'
+ok()    { echo "${G}✓${N} $*"; }
+warn()  { echo "${Y}⚠${N} $*"; }
+err()   { echo "${R}✗${N} $*"; }
+hint()  { echo "  ${C}→${N} $*"; }
+section() { echo; echo "${C}═══ $* ═══${N}"; }
+
+# ── --version ─────────────────────────────────────────
+cmd_version() {
+    local sha=""
+    if [ -d "$WHISPER_DIR/.git" ]; then
+        sha=$(git -C "$WHISPER_DIR" rev-parse --short HEAD 2>/dev/null || true)
+    fi
+    # 也尝试本项目仓库（开发时直接跑此脚本）
+    if [ -z "$sha" ]; then
+        local script_dir
+        script_dir="$(cd "$(dirname "$0")/.." && pwd)"
+        sha=$(git -C "$script_dir" rev-parse --short HEAD 2>/dev/null || true)
+    fi
+
+    if [ -n "$sha" ]; then
+        echo "local-voice-input $VERSION (commit $sha)"
+    else
+        echo "local-voice-input $VERSION"
+    fi
+    echo "https://github.com/$GITHUB_REPO"
+}
+
+# ── --doctor ──────────────────────────────────────────
+cmd_doctor() {
+    local fails=0 warns=0
+
+    echo "${C}🩺 vinput doctor ($VERSION)${N}"
+
+    # ─── 工具链 ───
+    section "工具链 (PATH)"
+    for tool in sox rec jq whisper-cli ollama afplay osascript; do
+        local path
+        if path=$(command -v "$tool" 2>/dev/null); then
+            ok "$tool $path"
+        else
+            err "$tool — 未在 PATH 中"
+            hint "brew install $(case $tool in whisper-cli) echo whisper-cpp ;; rec|sox) echo sox ;; *) echo $tool ;; esac)"
+            ((fails++))
+        fi
+    done
+
+    # ─── 资源 ───
+    section "资源文件"
+    if [ -f "$MODEL_PATH" ]; then
+        local size=$(du -h "$MODEL_PATH" | cut -f1)
+        ok "Whisper 模型 ($size)  $MODEL_PATH"
+    else
+        err "Whisper 模型缺失: $MODEL_PATH"
+        hint "重跑 install.sh 自动下载"
+        ((fails++))
+    fi
+
+    if [ -x "$HUD_BIN" ]; then
+        local arch=$(lipo -archs "$HUD_BIN" 2>/dev/null || echo "unknown")
+        ok "HUD 二进制 ($arch)  $HUD_BIN"
+    else
+        err "HUD 二进制缺失或不可执行: $HUD_BIN"
+        hint "重跑 install.sh，或手动 swiftc -O src/hud.swift -o $HUD_BIN"
+        ((fails++))
+    fi
+
+    if [ -f "$CONFIG_FILE" ]; then
+        ok "配置文件        $CONFIG_FILE"
+    else
+        warn "配置文件缺失    $CONFIG_FILE (将使用脚本内置默认值)"
+        ((warns++))
+    fi
+
+    if [ -f "$HOTWORDS_FILE" ]; then
+        local count=$(wc -l < "$HOTWORDS_FILE" | xargs)
+        ok "热词词表        $HOTWORDS_FILE ($count 词)"
+    else
+        warn "热词词表缺失    $HOTWORDS_FILE (将使用脚本内置默认词)"
+        ((warns++))
+    fi
+
+    # ─── 运行时 ───
+    section "运行时状态"
+    if curl -fs --max-time 2 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+        local loaded
+        loaded=$(curl -fs "$OLLAMA_URL/api/tags" | jq -r ".models[].name" 2>/dev/null)
+        if echo "$loaded" | grep -Fxq "$OLLAMA_MODEL"; then
+            ok "Ollama 运行中   $OLLAMA_MODEL 已可用"
+        else
+            warn "Ollama 运行中   但 $OLLAMA_MODEL 未拉取"
+            hint "ollama pull $OLLAMA_MODEL"
+            ((warns++))
+        fi
+    else
+        err "Ollama 未启动   $OLLAMA_URL 无响应"
+        hint "brew services start ollama  或  ollama serve &"
+        ((fails++))
+    fi
+
+    if [ -x "$HUD_BIN" ]; then
+        if "$HUD_BIN" "🩺 doctor 启动 HUD" 0.5 >/dev/null 2>&1 & disown 2>/dev/null; then
+            ok "HUD 可启动      屏幕上应该闪过一个测试 HUD"
+        fi
+    fi
+
+    # ─── 麦克风 ───
+    section "麦克风测试 (3 秒，请保持安静或说话均可)"
+    # 在 system_profiler 输出里：设备名是 8 空格缩进的 "DeviceName:" 段头，
+    # "Default Input Device: Yes" 出现在它下面的属性区。
+    local default_input
+    default_input=$(system_profiler SPAudioDataType 2>/dev/null | awk '
+        /^ {8}[^ ].*:$/ {
+            dev=$0
+            sub(/[ :]+$/, "", dev)
+            sub(/^[ ]+/, "", dev)
+        }
+        /Default Input Device: Yes/ { print dev; exit }
+    ')
+    if [ -n "$default_input" ]; then
+        ok "默认输入设备    $default_input"
+        if echo "$default_input" | grep -qiE "external|teams|virtual"; then
+            warn "  这看起来不是内置麦，常见原因是插着无麦的有线耳机"
+            ((warns++))
+        fi
+    else
+        warn "无法读取默认输入设备 (system_profiler 异常)"
+        ((warns++))
+    fi
+
+    if command -v rec >/dev/null 2>&1; then
+        local wav=$(mktemp -t vinput-doctor.XXXXXX).wav
+        rec -q -c 1 -r 16000 -b 16 "$wav" trim 0 3 2>/dev/null
+        if [ -s "$wav" ]; then
+            local rms max
+            rms=$(sox "$wav" -n stat 2>&1 | awk '/RMS *amplitude/ {print $3}')
+            max=$(sox "$wav" -n stat 2>&1 | awk '/Maximum amplitude/ {print $3}')
+            if awk "BEGIN {exit !($rms > 0.01)}"; then
+                ok "录音信号       RMS=$rms  Max=$max — 健康"
+            elif awk "BEGIN {exit !($rms > 0.002)}"; then
+                warn "录音信号       RMS=$rms  Max=$max — 偏弱"
+                hint "可能你没说话，或麦克风音量太低"
+                ((warns++))
+            else
+                err "录音信号       RMS=$rms — 几乎纯静音"
+                hint "1) 检查系统设置 → 声音 → 输入，确认选了 MacBook Pro Microphone"
+                hint "2) 拔掉只能听不能说的有线耳机"
+                hint "3) 在系统设置 → 隐私 → 麦克风 中授权 Raycast / sox"
+                ((fails++))
+            fi
+        else
+            err "录音失败       rec 没生成有效 WAV"
+            hint "检查麦克风权限：系统设置 → 隐私 → 麦克风"
+            ((fails++))
+        fi
+        rm -f "$wav"
+    fi
+
+    # ─── 总结 ───
+    section "总结"
+    if [ "$fails" -eq 0 ] && [ "$warns" -eq 0 ]; then
+        ok "${G}一切就绪，可以正常使用。${N}"
+        return 0
+    fi
+    if [ "$fails" -gt 0 ]; then
+        err "$fails 项需要修复"
+    fi
+    if [ "$warns" -gt 0 ]; then
+        warn "$warns 项警告（不一定影响使用）"
+    fi
+    [ "$fails" -gt 0 ] && return 1 || return 0
+}
+
+# ── --help ────────────────────────────────────────────
+cmd_help() {
+    cat <<EOF
+vinput — local-voice-input CLI ($VERSION)
+
+用法:
+  vinput --version       显示版本号
+  vinput --doctor        运行诊断检查（工具链 / 资源 / 运行时 / 麦克风）
+  vinput --help          显示此帮助
+
+触发语音输入：
+  通过 Raycast 绑定的快捷键（如 ⌘⇧Space）。本命令不会启动录音。
+  调试时也可以直接跑: $HOME/.whisper_models/vinput_bg.sh
+
+详见:
+  https://github.com/$GITHUB_REPO
+EOF
+}
+
+# ── 路由 ──────────────────────────────────────────────
+case "${1:-help}" in
+    --version|-V|version)   cmd_version ;;
+    --doctor|doctor)        cmd_doctor ;;
+    --help|-h|help|"")      cmd_help ;;
+    *)
+        err "未知命令: $1"
+        echo
+        cmd_help
+        exit 2
+        ;;
+esac

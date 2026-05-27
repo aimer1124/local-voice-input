@@ -22,6 +22,7 @@ echo -e "${YELLOW}▶${NC} 删除脚本与 HUD..."
 rm -f \
     "$HOME/.whisper_models/vinput.sh" \
     "$HOME/.whisper_models/vinput_bg.sh" \
+    "$HOME/.whisper_models/vinput" \
     "$HOME/.whisper_models/hud" \
     "$HOME/.config/raycast-scripts/voice-input.sh"
 

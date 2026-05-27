@@ -8,6 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ## [Unreleased]
 
+### Added
+- **`vinput --doctor`** diagnostic command — checks toolchain, resources, runtime
+  state, default audio device, and runs a 3-second mic test. Reports failures
+  with concrete fix suggestions. (closes #2)
+- **`vinput --version`** flag — prints version + git short SHA + repo URL. (closes #5)
+- **`bin/vinput`** CLI dispatcher — single entry point for meta commands;
+  does *not* trigger recording. Real voice input still goes through Raycast →
+  `vinput_bg.sh` exactly as before.
+
 See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer1124/local-voice-input/milestones) for what's planned next.
 
 ---

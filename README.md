@@ -329,10 +329,17 @@ vinput/
 
 ## 🔧 故障排查
 
+**一键诊断**（推荐先跑这个）：
+```bash
+~/.whisper_models/vinput --doctor
+```
+会自动检查工具链、资源文件、Ollama 状态、HUD 可用性，并跑一次 3 秒麦克风录音测试，按"健康/偏弱/几乎静音"输出 RMS 值。
+
 | 症状 | 命令 / 操作 |
 |---|---|
 | Raycast 没反应 | 检查命令是否出现、快捷键有无冲突 |
 | 录音失败 | `tail -50 /tmp/vinput_debug.log` |
+| 不确定哪里出问题 | `~/.whisper_models/vinput --doctor` |
 | 麦克风电平测试 | `rec -q /tmp/t.wav trim 0 3 && sox /tmp/t.wav -n stat \| grep RMS` |
 | 默认输入设备 | 系统设置 → 声音 → 输入（用 MacBook Pro Microphone） |
 | 卡死的录音 | `pkill -f "rec -q"; rm -rf /tmp/vinput.lock.d` |
