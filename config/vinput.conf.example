@@ -21,15 +21,18 @@ SHORT_TEXT_THRESHOLD=8
 # 5 路 beam search — 减少同音字误选（"空航" vs "空行"）。延迟 +0.5s
 WHISPER_BEAM_SIZE=5
 
-# 起始温度 + 递增步长。失败时自动温度采样兜底，避免吐空字符串
-WHISPER_TEMPERATURE=0
+# 起始温度 — 留空 = whisper.cpp 默认（0）
+# WHISPER_TEMPERATURE=0
+
+# 温度递增步长。失败时自动温度采样兜底，避免吐空字符串
 WHISPER_TEMPERATURE_INC=0.2
 
-# 静音段概率高于此值则不输出（默认 0.6 偏宽松，会把"嗯啊"也算成语音）
-WHISPER_NO_SPEECH_THOLD=0.5
-
-# 低于此 logprob 的段被丢（更负 = 更严格；-0.8 比默认 -1.0 严一点）
-WHISPER_LOGPROB_THOLD=-0.8
+# ⚠️ v1.1.3 曾把这两个阈值调严（0.5 / -0.8），结果在普通麦的边缘音质下
+# 会把所有段都判成"非语音"或"低置信度"，外显成 ❌ 未识别到有效语音。
+# 自 v1.1.6 改回 whisper.cpp 默认 = 留空。只在 doctor 显示信号偏弱时再考虑设。
+#
+# WHISPER_NO_SPEECH_THOLD=0.6   # 越小越严
+# WHISPER_LOGPROB_THOLD=-1.0    # 越接近 0 越严
 
 # ===== 动态 Prompt 上下文（v1.1.4）=====
 # 把最近 N 次成功转写拼到 Whisper --prompt 前面，给模型「短期记忆」

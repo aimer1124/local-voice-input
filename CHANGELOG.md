@@ -12,6 +12,29 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.1.6] — 2026-05-27
+
+Hotfix — revert v1.1.3's strict Whisper thresholds that caused empty
+recognition on normal-quality audio.
+
+### Fixed
+- `--no-speech-thold 0.5` and `--logprob-thold -0.8` from v1.1.3 were
+  **stricter than whisper.cpp's defaults** (0.6 / -1.0). On real-world
+  audio (built-in mic, headset, marginal SNR), this caused Whisper to
+  flag every segment as either "non-speech" or "low-confidence" and
+  drop it — producing an empty transcript that surfaced as the HUD
+  message **❌ 未识别到有效语音**.
+  Defaults are now left unset, so whisper.cpp picks its own (0.6 /
+  -1.0). Users wanting the stricter v1.1.3 behavior can set the env
+  vars back in `vinput.conf`.
+
+### Kept (genuinely good)
+- `--beam-size 5` (still helps with homophones)
+- `--temperature-inc 0.2` (fallback when greedy returns empty)
+- All SoX preprocessing, dynamic prompt, record-buffer warmup.
+
+---
+
 ## [1.1.5] — 2026-05-27
 
 Critical patch — `vinput setup` failed on brew install with `unbound variable`.
@@ -174,7 +197,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.5...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.6...HEAD
+[1.1.6]: https://github.com/aimer1124/local-voice-input/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/aimer1124/local-voice-input/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/aimer1124/local-voice-input/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/aimer1124/local-voice-input/compare/v1.1.1...v1.1.3

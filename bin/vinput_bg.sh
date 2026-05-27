@@ -29,12 +29,17 @@ SILENCE_STOP_THRESHOLD="${SILENCE_STOP_THRESHOLD:-6%}"
 MAX_REC_SECONDS="${MAX_REC_SECONDS:-30}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$HOME/.config/vinput_hotwords.txt}"
 
-# Whisper 解码参数（v1.1.3）— 任何一项设置为空字符串即跳过对应 flag
-WHISPER_BEAM_SIZE="${WHISPER_BEAM_SIZE:-5}"
-WHISPER_TEMPERATURE="${WHISPER_TEMPERATURE:-0}"
-WHISPER_TEMPERATURE_INC="${WHISPER_TEMPERATURE_INC:-0.2}"
-WHISPER_NO_SPEECH_THOLD="${WHISPER_NO_SPEECH_THOLD:-0.5}"
-WHISPER_LOGPROB_THOLD="${WHISPER_LOGPROB_THOLD:--0.8}"   # 负值；低于此 logprob 的段会被丢
+# Whisper 解码参数 — 任何一项设置为空字符串即跳过对应 flag
+#
+# 历史踩坑：v1.1.3 默认把 no-speech-thold 调到 0.5 / logprob-thold 调到 -0.8（都比
+# whisper.cpp 默认值更严），在普通麦的边缘音质下会**整段被丢**，外显是"未识别到有效语音"。
+# v1.1.6 起改回 whisper.cpp 默认值 —— 留空即不传 flag，由 whisper.cpp 自己挑默认。
+# 想再调严，自己在 vinput.conf 里设回 0.5 / -0.8。
+WHISPER_BEAM_SIZE="${WHISPER_BEAM_SIZE:-5}"           # beam search 还是开着，对同音字有用
+WHISPER_TEMPERATURE="${WHISPER_TEMPERATURE:-}"        # 留空 = whisper.cpp 默认 (0)
+WHISPER_TEMPERATURE_INC="${WHISPER_TEMPERATURE_INC:-0.2}"  # 失败时温度递增重试，避免空输出
+WHISPER_NO_SPEECH_THOLD="${WHISPER_NO_SPEECH_THOLD:-}"     # 留空 = whisper.cpp 默认 (0.6)
+WHISPER_LOGPROB_THOLD="${WHISPER_LOGPROB_THOLD:-}"         # 留空 = whisper.cpp 默认 (-1.0)
 
 # 动态 prompt 上下文（v1.1.4）— 拼接最近成功转写作为 Whisper 短期记忆
 USE_RECENT_PROMPT="${USE_RECENT_PROMPT:-1}"
