@@ -16,7 +16,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # 需要 tag 历史来生成 compare 链接
 
       - name: Show toolchain
         run: |
@@ -35,19 +37,51 @@ jobs:
         run: |
           shasum -a 256 hud | tee hud.sha256
 
+      - name: Extract CHANGELOG section for this tag
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # 把 v1.2.0 → 1.2.0，再从 CHANGELOG.md 中抠出 "## [1.2.0]" ~ 下一个 "## [" 之间的内容
+          VER="${TAG#v}"
+          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+          awk -v ver="$VER" '
+            $0 ~ "^## \\["ver"\\]" {p=1; next}
+            p && /^## \[/         {exit}
+            p                     {print}
+          ' CHANGELOG.md | sed '/^---$/,$d' > "$NOTES_FILE"
+
+          if [ ! -s "$NOTES_FILE" ]; then
+            echo "⚠ No CHANGELOG section found for $VER, falling back to auto notes"
+            echo "no-changelog-section=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "▶ Extracted $(wc -l < "$NOTES_FILE") lines for $VER"
+            printf '\n**Full Changelog**: https://github.com/%s/compare/%s\n' \
+              "${{ github.repository }}" \
+              "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "HEAD")...$TAG" >> "$NOTES_FILE"
+            echo "no-changelog-section=0" >> "$GITHUB_OUTPUT"
+          fi
+          echo "notes-file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+
       - name: Create release (if missing) and upload binary
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
+          NOTES_FILE: ${{ steps.notes.outputs.notes-file }}
+          NO_CHANGELOG: ${{ steps.notes.outputs.no-changelog-section }}
         run: |
-          # 如果 release 还不存在（用户只是 git push tag），自动创建一个并用 commit 历史生成 notes
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "▶ Creating new release $TAG with auto-generated notes"
-            gh release create "$TAG" \
-              --title "$TAG" \
-              --generate-notes
+            echo "▶ Creating new release $TAG"
+            if [ "$NO_CHANGELOG" = "1" ]; then
+              gh release create "$TAG" --title "$TAG" --generate-notes
+            else
+              gh release create "$TAG" --title "$TAG" --notes-file "$NOTES_FILE"
+            fi
           else
-            echo "▶ Release $TAG already exists, only uploading assets"
+            echo "▶ Release $TAG already exists — refreshing notes from CHANGELOG"
+            if [ "$NO_CHANGELOG" = "0" ]; then
+              gh release edit "$TAG" --notes-file "$NOTES_FILE"
+            fi
           fi
 
           # --clobber 允许覆盖同名旧附件（重跑 workflow 时安全）
