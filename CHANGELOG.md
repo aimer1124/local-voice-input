@@ -12,6 +12,33 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.1.3] — 2026-05-27
+
+ASR decode tuning patch — first concrete wins on transcription accuracy.
+
+### Changed
+- **Whisper decode parameters** — added `--beam-size 5`,
+  `--temperature 0 --temperature-inc 0.2`, `--no-speech-thold 0.5`,
+  `--logprob-thold -0.8`. Reduces homophone misses (e.g. "空航" vs
+  "空行"), prevents hallucinated text in silent segments, and
+  recovers gracefully when greedy decode returns empty. All
+  overridable via `~/.config/vinput.conf`. (closes #14)
+- **Hotword file is now sentence-form** — Whisper's `--prompt` is a
+  decoder context, not a keyword list. Context-rich sentences bias
+  the decoder substantially harder than a comma-separated list.
+  Existing comma-only hotword files keep working but new installs
+  start with sentence-form examples. (closes #15)
+- **Short-text threshold uses `wc -m`** — previous byte-length check
+  treated a 5-char Chinese sentence (15 bytes) the same as a 15-char
+  English one, leading to inconsistent LLM bypass. Default threshold
+  re-tuned from 15 to 8 (characters). (closes #16)
+
+### Notes
+- No new dependencies; pure config + flag change.
+- Decode latency: ~+0.5s for the beam search; subjectively unnoticeable.
+
+---
+
 ## [1.1.1] — 2026-05-27
 
 Bootstrap polish — prepares the ground for the Homebrew tap.
@@ -103,7 +130,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/aimer1124/local-voice-input/compare/v1.1.1...v1.1.3
 [1.1.1]: https://github.com/aimer1124/local-voice-input/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/aimer1124/local-voice-input/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/aimer1124/local-voice-input/compare/v1.0.1...v1.0.2

@@ -10,8 +10,26 @@ WHISPER_THREADS=8
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
 
-# 文本短于此阈值时跳过 LLM，直接用原始 ASR 结果
-SHORT_TEXT_THRESHOLD=15
+# 文本字数短于此阈值时跳过 LLM，直接用原始 ASR 结果
+# 单位 = 字符数（中文 1 字 = 1，由 `wc -m` 数）；默认 8 大致是"取消/搜索/帮我..."这类短指令的下限
+SHORT_TEXT_THRESHOLD=8
+
+# ===== Whisper 解码参数（v1.1.3）=====
+# 任何变量留空 = 不传该 flag（用 whisper.cpp 内置默认）
+# 默认值已经针对"中文 + 程序员场景"调优过；改前先看 `vinput --doctor` 现状
+
+# 5 路 beam search — 减少同音字误选（"空航" vs "空行"）。延迟 +0.5s
+WHISPER_BEAM_SIZE=5
+
+# 起始温度 + 递增步长。失败时自动温度采样兜底，避免吐空字符串
+WHISPER_TEMPERATURE=0
+WHISPER_TEMPERATURE_INC=0.2
+
+# 静音段概率高于此值则不输出（默认 0.6 偏宽松，会把"嗯啊"也算成语音）
+WHISPER_NO_SPEECH_THOLD=0.5
+
+# 低于此 logprob 的段被丢（更负 = 更严格；-0.8 比默认 -1.0 严一点）
+WHISPER_LOGPROB_THOLD=-0.8
 
 # ===== 后台版专属 =====
 # 1 = 自动模拟 ⌘V 粘贴到光标（需开启"辅助功能"权限）
