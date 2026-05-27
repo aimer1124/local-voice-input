@@ -12,6 +12,24 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.1.8] — 2026-05-27
+
+Hotfix — same bug class as v1.1.5, on a different line.
+
+### Fixed
+- `cmd_setup` had `$HOTWORDS_FILE（保留不覆盖）` in the new
+  auto-migration code path from v1.1.7 — Chinese full-width `（`
+  directly after `$VAR` makes bash with `set -u` treat the whole
+  thing as one unbound identifier. Fixed with `${HOTWORDS_FILE}`.
+  Same pattern as the v1.1.5 fix for `$CONFIG_FILE` and `$OLLAMA_MODEL`.
+
+### Lesson
+- Running a project-wide regex sweep for `\$VAR<non-ASCII>` would have
+  caught all three at once. Added to the v1.3.0 #24 benchmark suite as
+  a lint check: pre-commit hook should grep for this pattern and fail.
+
+---
+
 ## [1.1.7] — 2026-05-27
 
 Hotfix — completes the v1.1.3→v1.1.6 recovery saga.
@@ -243,7 +261,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.7...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.8...HEAD
+[1.1.8]: https://github.com/aimer1124/local-voice-input/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/aimer1124/local-voice-input/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/aimer1124/local-voice-input/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/aimer1124/local-voice-input/compare/v1.1.4...v1.1.5

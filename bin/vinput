@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.1.7"
+VERSION="1.1.8"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
@@ -316,7 +316,7 @@ cmd_setup() {
             hint "原文件备份在: $backup"
             hint "旧格式在中文 -l zh 下会让 Whisper 输出乱码（v1.1.7 hotfix）"
         else
-            ok "已有热词      $HOTWORDS_FILE（保留不覆盖）"
+            ok "已有热词      ${HOTWORDS_FILE}（保留不覆盖）"
         fi
     fi
 
