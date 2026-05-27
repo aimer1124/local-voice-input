@@ -12,6 +12,52 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.1.7] — 2026-05-27
+
+Hotfix — completes the v1.1.3→v1.1.6 recovery saga.
+
+### Fixed
+- **SoX `norm -3` doesn't work in streaming `rec`** — v1.1.4 added peak
+  normalization to the SoX chain, but `norm` is a two-pass effect: it
+  reads the entire input to find the peak, then scales. In a streaming
+  `rec` that gets SIGINT'd when the user presses "stop", the buffer
+  never flushes → WAV ends with **0 audio frames** → whisper-cli
+  errors with `failed to read the frames of the audio data` → HUD
+  shows ❌ 未识别到有效语音.
+  Replaced with `gain -3` (single-pass, streaming-safe). Configurable
+  via `SOX_GAIN_DB` (set to a positive value to amplify quiet mics).
+- **Legacy word-per-line hotword files corrupt Chinese transcription**
+  — `~/.config/vinput_hotwords.txt` from v1.0.x is 44 English tech
+  terms, one per line. Passed as `--prompt` with `-l zh`, Whisper
+  outputs garbled UTF-8 (`卖����`) which `sed` rejects → empty
+  RAW_RESULT → same false "未识别到有效语音" error. `vinput setup`
+  now detects this format (no Chinese chars, > 10 short lines) and
+  automatically migrates it to the v1.1.4 sentence-form, backing up
+  the original to `vinput_hotwords.txt.v1.0.x-backup`.
+- **`sed` UTF-8 robustness** — in case Whisper still produces
+  invalid UTF-8 in some edge case, the read path now runs sed under
+  `LC_ALL=C` and rescues non-UTF-8 output with `iconv -c`.
+
+### Added
+- `VINPUT_DEBUG_KEEP=1` — when set, preserves the most recent
+  `voice.wav` + whisper output at `/tmp/vinput-last.*` for debug
+  inspection. Default off; no overhead in normal runs.
+
+### Removed
+- The always-on debug copy from v1.1.7-dev. (Replaced by the opt-in
+  flag above.)
+
+### Lessons
+- v1.1.3's claimed "+13% homophone, +21% proper-noun, -10% hallucination"
+  numbers were **paper-extrapolated, never measured**. They cost three
+  hotfixes to recover from.
+- v1.1.4's claimed "+18% quiet-speaker accuracy" was **physically
+  impossible** because `norm` never worked in streaming `rec`.
+- Real-audio regression suite is now a hard prerequisite — tracked
+  separately in v1.3.0.
+
+---
+
 ## [1.1.6] — 2026-05-27
 
 Hotfix — revert v1.1.3's strict Whisper thresholds that caused empty
@@ -197,7 +243,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.6...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.7...HEAD
+[1.1.7]: https://github.com/aimer1124/local-voice-input/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/aimer1124/local-voice-input/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/aimer1124/local-voice-input/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/aimer1124/local-voice-input/compare/v1.1.3...v1.1.4

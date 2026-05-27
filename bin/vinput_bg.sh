@@ -48,11 +48,18 @@ RECENT_PROMPT_FILE="${RECENT_PROMPT_FILE:-$HOME/.cache/vinput/recent.txt}"
 # 上下文上限（字符数）。whisper.cpp 的 prompt token 上限 ≈ 224，按中文 1 字 = 1.5 token 估算
 RECENT_PROMPT_MAX_CHARS="${RECENT_PROMPT_MAX_CHARS:-280}"
 
-# SoX 录音预处理（v1.1.4 #20）— 提升任意场景下 Whisper 输入质量
+# SoX 录音预处理（v1.1.4 #20，v1.1.7 重写）— 提升任意场景下 Whisper 输入质量
+#
+# ⚠️ v1.1.4 用 `norm -3` 做峰值归一化，但 `norm` 在 streaming rec 下会先 buffer 整段
+# 找 peak —— 用户按"停录"时 rec 被 SIGINT 杀掉，buffer 还没 flush → WAV 0 帧 →
+# whisper-cli 报 "failed to read the frames of the audio data" → 外显 "未识别到有效语音"。
+# v1.1.7 改成 `gain -3` 固定衰减（streaming 友好），失去了"小声放大"的能力，但稳定。
+#
+# 想要峰值归一化效果，需要先录完再后处理（v1.3.0 #18 计划方向之一）。
 USE_SOX_PREPROCESS="${USE_SOX_PREPROCESS:-1}"
 SOX_HIGHPASS="${SOX_HIGHPASS:-80}"     # 切掉风扇 / 街道低频嗡嗡声
 SOX_LOWPASS="${SOX_LOWPASS:-8000}"     # 切掉高频白噪 + 嘶嘶声
-SOX_NORM_DB="${SOX_NORM_DB:--3}"       # 峰值归一化到 -3dB（替代旧的 gain -3 衰减）
+SOX_GAIN_DB="${SOX_GAIN_DB:--3}"       # 固定增益（负值 = 衰减；正值 = 放大）。streaming OK
 REC_WARMUP_MS="${REC_WARMUP_MS:-150}"  # rec 启动后等待 buffer 就绪，避免首字丢失
 
 # 屏幕中央 HUD（替代右上角通知）
@@ -141,13 +148,14 @@ $HOTWORDS"
     fi
 fi
 
-# 组装 SoX 后处理链（v1.1.4 #20）
-# 顺序：channels/rate（必须靠前）→ highpass → lowpass → norm
+# 组装 SoX 后处理链（v1.1.7：streaming-safe effects only）
+# 顺序：channels/rate（必须靠前）→ highpass → lowpass → gain
+# 注意：禁止用 `norm`、`gain -n` 这些需要 buffer 整流的效果 —— 见上面 v1.1.7 注释。
 if [ "$USE_SOX_PREPROCESS" = "1" ]; then
     SOX_TAIL=(channels 1 rate 16000)
     [ -n "$SOX_HIGHPASS" ] && SOX_TAIL+=(highpass "$SOX_HIGHPASS")
     [ -n "$SOX_LOWPASS" ]  && SOX_TAIL+=(lowpass "$SOX_LOWPASS")
-    [ -n "$SOX_NORM_DB" ]  && SOX_TAIL+=(norm "$SOX_NORM_DB")
+    [ -n "$SOX_GAIN_DB" ]  && SOX_TAIL+=(gain "$SOX_GAIN_DB")
 else
     # 兼容老行为：仅必要的下采样 + 固定 -3dB 衰减
     SOX_TAIL=(channels 1 rate 16000 gain -3)
@@ -201,9 +209,23 @@ WHISPER_ARGS=(-t "$WHISPER_THREADS" -m "$MODEL_PATH" -f "$AUDIO_PATH" -l "$WHISP
 [ -n "$WHISPER_LOGPROB_THOLD" ]   && WHISPER_ARGS+=(--logprob-thold "$WHISPER_LOGPROB_THOLD")
 WHISPER_ARGS+=(--prompt "$HOTWORDS" -otxt -of "$TXT_PATH" -nt -np)
 
-whisper-cli "${WHISPER_ARGS[@]}" > /dev/null 2>&1
+# VINPUT_DEBUG_KEEP=1 时保留最近一次录音 + whisper 输出到 /tmp/vinput-last.*，便于排错。
+if [ "${VINPUT_DEBUG_KEEP:-0}" = "1" ]; then
+    whisper-cli "${WHISPER_ARGS[@]}" > /tmp/vinput-debug-whisper.out 2>&1
+    cp "$AUDIO_PATH" /tmp/vinput-last.wav 2>/dev/null
+    cp "${TXT_PATH}.txt" /tmp/vinput-last.txt 2>/dev/null
+else
+    whisper-cli "${WHISPER_ARGS[@]}" > /dev/null 2>&1
+fi
 
-RAW_RESULT=$(sed 's/^[[:space:]]*//; s/[[:space:]]*$//' "${TXT_PATH}.txt" 2>/dev/null)
+# Whisper 在某些 prompt/audio 组合下会输出损坏 UTF-8（见 v1.1.7 hotwords 迁移注释）。
+# sed -E 默认会因非法字节序列退出 1，导致 RAW_RESULT 空 → 误报"未识别到有效语音"。
+# 这里用 LC_ALL=C 让 sed 按字节处理，再单独验证 UTF-8 合法性。
+RAW_RESULT=$(LC_ALL=C sed 's/^[[:space:]]*//; s/[[:space:]]*$//' "${TXT_PATH}.txt" 2>/dev/null)
+# 如果输出包含非法 UTF-8（比如孤立的 continuation byte），用 iconv 过滤掉
+if ! echo "$RAW_RESULT" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+    RAW_RESULT=$(echo "$RAW_RESULT" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null)
+fi
 
 if [ -z "$RAW_RESULT" ] || [ ${#RAW_RESULT} -le 2 ]; then
     hud "❌ 未识别到有效语音" 3

@@ -42,12 +42,14 @@ RECENT_PROMPT_COUNT=5
 RECENT_PROMPT_FILE="$HOME/.cache/vinput/recent.txt"
 RECENT_PROMPT_MAX_CHARS=280
 
-# ===== SoX 录音预处理（v1.1.4）=====
-# 让 Whisper 拿到的音频更"干净"，全局基线提升
+# ===== SoX 录音预处理（v1.1.4 引入，v1.1.7 重写）=====
+# ⚠️ 重要：所有效果必须是 streaming-safe（不能依赖整流 buffer）。
+#    v1.1.4 一开始用 `norm -3`，会让 rec 在 SIGINT 时 0 帧输出 →
+#    HUD 提示 "未识别到有效语音"。v1.1.7 改回固定 gain。
 USE_SOX_PREPROCESS=1
 SOX_HIGHPASS=80      # 切掉低频 — 风扇 / 街道嗡嗡声
 SOX_LOWPASS=8000     # 切掉高频 — 嘶嘶声 / 抖动
-SOX_NORM_DB=-3       # 峰值归一化（声音小的用户会感受到大幅改善）
+SOX_GAIN_DB=-3       # 固定增益（dB，负=衰减、正=放大）。小声用户可设 +6 ~ +12
 REC_WARMUP_MS=150    # rec 启动后等待 buffer 就绪再提示用户说话，避免首字丢失
 
 # ===== 后台版专属 =====

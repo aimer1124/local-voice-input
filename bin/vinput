@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.1.6"
+VERSION="1.1.7"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
@@ -303,6 +303,21 @@ cmd_setup() {
     if [ -n "$hot_src" ] && [ ! -f "$HOTWORDS_FILE" ]; then
         cp "$hot_src" "$HOTWORDS_FILE"
         ok "写入默认热词  $HOTWORDS_FILE"
+    elif [ -n "$hot_src" ] && [ -f "$HOTWORDS_FILE" ]; then
+        # 自动迁移：v1.0.x 留下的"一行一个英文词"格式会让 Whisper 在中文场景下吐 UTF-8 乱码。
+        # 判定标准：① 没有中文 ② 平均行长 < 15 字符 ③ 行数 > 10 → 视为 word-list
+        if ! grep -q '[一-龥]' "$HOTWORDS_FILE" 2>/dev/null \
+           && [ "$(wc -l < "$HOTWORDS_FILE")" -gt 10 ] \
+           && [ "$(awk '{s+=length($0); n++} END{print int(s/n)}' "$HOTWORDS_FILE" 2>/dev/null || echo 99)" -lt 15 ]; then
+            local backup="${HOTWORDS_FILE}.v1.0.x-backup"
+            cp "$HOTWORDS_FILE" "$backup"
+            cp "$hot_src" "$HOTWORDS_FILE"
+            warn "检测到旧格式热词（一行一个英文词），已自动迁移为语境句版"
+            hint "原文件备份在: $backup"
+            hint "旧格式在中文 -l zh 下会让 Whisper 输出乱码（v1.1.7 hotfix）"
+        else
+            ok "已有热词      $HOTWORDS_FILE（保留不覆盖）"
+        fi
     fi
 
     # ─── Raycast 脚本 ───
