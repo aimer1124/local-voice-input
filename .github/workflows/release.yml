@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build HUD and attach to release
+    runs-on: macos-14         # Apple Silicon (arm64)
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          echo "Runner arch: $(uname -m)"
+          swiftc --version
+          xcodebuild -version
+
+      - name: Build HUD (optimized arm64 binary)
+        run: |
+          swiftc -O src/hud.swift -o hud
+          file hud
+          lipo -archs hud
+          ls -lh hud
+
+      - name: Compute SHA256
+        run: |
+          shasum -a 256 hud | tee hud.sha256
+
+      - name: Create release (if missing) and upload binary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # 如果 release 还不存在（用户只是 git push tag），自动创建一个并用 commit 历史生成 notes
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "▶ Creating new release $TAG with auto-generated notes"
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes
+          else
+            echo "▶ Release $TAG already exists, only uploading assets"
+          fi
+
+          # --clobber 允许覆盖同名旧附件（重跑 workflow 时安全）
+          gh release upload "$TAG" hud hud.sha256 --clobber
+
+          echo ""
+          echo "✅ Release URL: $(gh release view "$TAG" --json url --jq .url)"
