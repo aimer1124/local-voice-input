@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 提问 / Questions and Discussions
+    url: https://github.com/aimer1124/local-voice-input/discussions
+    about: 使用问题、配置疑问、想法讨论请用 Discussions / For usage questions, configuration help, or open-ended discussion
+  - name: 📋 查看 Roadmap
+    url: https://github.com/aimer1124/local-voice-input/blob/main/ROADMAP.md
+    about: 看看 v1.1.0 / v1.2.0 / v2.0.0 已规划的内容 / See what's already planned

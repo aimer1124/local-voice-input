@@ -1,12 +1,18 @@
 # 🎙️ local-voice-input — Local AI Voice Prompt Input
 
+[![CI](https://github.com/aimer1124/local-voice-input/actions/workflows/release.yml/badge.svg)](https://github.com/aimer1124/local-voice-input/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/aimer1124/local-voice-input?color=brightgreen)](https://github.com/aimer1124/local-voice-input/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Apple%20Silicon-lightgrey)](#requirements)
+[![Roadmap](https://img.shields.io/badge/roadmap-v1.1%20%E2%86%92%20v2.0-blue)](./ROADMAP.md)
+
 > **Fully offline** voice-to-text tool for programmers: press a hotkey, speak, get cleaned-up text pasted at your cursor.
 >
 > _CLI tool name: `vinput`_
 
 **100% local. Audio never leaves your machine. No cloud, no accounts.**
 
-[中文 README](./README.md)
+[中文 README](./README.md) · [CHANGELOG](./CHANGELOG.md) · [ROADMAP](./ROADMAP.md) · [Contributing](./CONTRIBUTING.md)
 
 ---
 

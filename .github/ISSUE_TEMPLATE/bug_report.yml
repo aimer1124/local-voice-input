@@ -1,0 +1,62 @@
+name: 🐛 Bug Report
+description: 报告一个 bug / Report a bug
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告 bug！请尽量填全以下信息以便快速复现。
+        Thanks for the bug report. Please fill in as much detail as you can.
+
+  - type: input
+    id: version
+    attributes:
+      label: vinput 版本 / Version
+      description: 跑 `git -C ~/local-voice-input rev-parse --short HEAD` 或贴 release tag
+      placeholder: "v1.0.2 or 6f4af08"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS 版本 + 芯片 / macOS version + chip
+      placeholder: "macOS 14.5, M2 Pro"
+    validations:
+      required: true
+
+  - type: textarea
+    id: describe
+    attributes:
+      label: 现象 / What happened
+      description: 描述实际发生了什么、你期望发生什么
+      placeholder: |
+        实际：按快捷键后没有提示音，HUD 也不出现
+        期望：听到 Pop 音并看到 "🎙️ 录音中..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      placeholder: |
+        1. 按下 ⌘⇧Space
+        2. 说话 5 秒
+        3. 再按 ⌘⇧Space
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / Logs
+      description: 跑 `tail -50 /tmp/vinput_debug.log` 贴出最近 50 行
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其他信息 / Additional context
+      description: 截图、配置文件内容、相关进程状态等
