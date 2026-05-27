@@ -14,6 +14,8 @@
 
 [中文 README](./README.md) · [CHANGELOG](./CHANGELOG.md) · [ROADMAP](./ROADMAP.md) · [Contributing](./CONTRIBUTING.md)
 
+![demo](./assets/demo.gif)
+
 ---
 
 ## ✨ Features

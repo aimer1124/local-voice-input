@@ -14,6 +14,14 @@
 #   INPUT=...     输入文件路径（默认 /tmp/demo.mov）
 #   OUTPUT=...    输出路径（默认 assets/demo.gif）
 #   MAX_MB=5      容忍的最大文件大小
+#
+# 字幕参数（可选，缺省则无字幕）：
+#   CAPTION_TOP="..."     顶部字幕（如说明工具用途的一句话）
+#   CAPTION_TOP_RANGE="0,99"  显示时间范围（秒），缺省覆盖全程
+#   CAPTION_BOTTOM="..."  底部字幕（如展示说出的内容 / 输出结果）
+#   CAPTION_BOTTOM_RANGE="0,99"
+#   CAPTION_SIZE=28
+#   CAPTION_FONT=/System/Library/Fonts/PingFang.ttc
 
 set -e
 
@@ -25,6 +33,13 @@ FPS="${FPS:-15}"
 WIDTH="${WIDTH:-1200}"
 QUALITY="${QUALITY:-85}"
 MAX_MB="${MAX_MB:-5}"
+
+CAPTION_TOP="${CAPTION_TOP:-}"
+CAPTION_TOP_RANGE="${CAPTION_TOP_RANGE:-0,9999}"
+CAPTION_BOTTOM="${CAPTION_BOTTOM:-}"
+CAPTION_BOTTOM_RANGE="${CAPTION_BOTTOM_RANGE:-0,9999}"
+CAPTION_SIZE="${CAPTION_SIZE:-28}"
+CAPTION_FONT="${CAPTION_FONT:-/System/Library/Fonts/PingFang.ttc}"
 
 # ── 颜色（用 $'...' 让 ESC 字符直接嵌入，避免 heredoc 里输出字面量）─
 G=$'\033[0;32m'; Y=$'\033[1;33m'; R=$'\033[0;31m'; N=$'\033[0m'
@@ -84,6 +99,28 @@ ffmpeg -loglevel error -i "$INPUT" \
 
 FRAME_COUNT=$(ls "$TMPDIR"/*.png 2>/dev/null | wc -l | xargs)
 ok "抽出 $FRAME_COUNT 帧"
+
+# ── 1.5/3 可选：用 Pillow 在帧上叠字幕（ffmpeg drawtext 在 brew ffmpeg 里默认没编译）
+if [ -n "$CAPTION_TOP$CAPTION_BOTTOM" ]; then
+    PYBIN="$REPO_DIR/.venv-tools/bin/python"
+    if [ ! -x "$PYBIN" ]; then
+        warn "Pillow venv 不存在，创建..."
+        python3 -m venv "$REPO_DIR/.venv-tools"
+        "$REPO_DIR/.venv-tools/bin/pip" install --quiet Pillow
+    fi
+
+    step "1.5/3 叠加字幕 (Pillow)"
+    CAPTION_TOP="$CAPTION_TOP" \
+    CAPTION_BOTTOM="$CAPTION_BOTTOM" \
+    CAPTION_TOP_RANGE="$CAPTION_TOP_RANGE" \
+    CAPTION_BOTTOM_RANGE="$CAPTION_BOTTOM_RANGE" \
+    CAPTION_SIZE="$CAPTION_SIZE" \
+    CAPTION_FONT="$CAPTION_FONT" \
+    FPS="$FPS" \
+    FRAME_DIR="$TMPDIR" \
+    "$PYBIN" "$REPO_DIR/scripts/overlay_captions.py"
+    ok "字幕已叠加到 $FRAME_COUNT 帧"
+fi
 
 step "2/3 编码 GIF (quality=$QUALITY)"
 gifski --quiet --quality "$QUALITY" --output "$OUTPUT" "$TMPDIR"/*.png

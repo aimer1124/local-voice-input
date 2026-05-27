@@ -14,6 +14,8 @@
 
 [English README](./README.en.md) · [CHANGELOG](./CHANGELOG.md) · [ROADMAP](./ROADMAP.md) · [Contributing](./CONTRIBUTING.md)
 
+![demo](./assets/demo.gif)
+
 ---
 
 ## ✨ 核心特性
