@@ -36,3 +36,28 @@ SILENCE_STOP_THRESHOLD="6%"
 # ===== 热词词表（可选）=====
 # 文件不存在时使用脚本内置默认词表
 HOTWORDS_FILE="$HOME/.config/vinput_hotwords.txt"
+
+# ===== HUD 样式（屏幕中央悬浮提示）=====
+# 改完无需重新编译 Swift，下次按快捷键即生效
+# 所有参数留空则使用 hud.swift 内置默认值（注释行显示的就是默认值）
+
+# 距屏幕底部的位置，0=贴底 / 50=正中 / 100=贴顶
+# HUD_Y_PERCENT=18
+
+# 窗口高度 (像素)
+# HUD_HEIGHT=96
+
+# 字号 + 字重
+# HUD_FONT_SIZE=26
+# HUD_FONT_WEIGHT="semibold"   # ultraLight/thin/light/regular/medium/semibold/bold/heavy/black
+
+# 圆角弧度
+# HUD_CORNER_RADIUS=20
+
+# 毛玻璃材质风格，影响整体观感（详见 NSVisualEffectView.Material 枚举）
+# 常用选择: hudWindow (深色磨砂) / sidebar (浅磨砂) / popover (淡色)
+# HUD_MATERIAL="hudWindow"
+
+# 自适应宽度区间（窗口宽度=文字宽+padding，再约束到这个范围）
+# HUD_WIDTH_MIN=220
+# HUD_WIDTH_MAX=900

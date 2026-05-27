@@ -271,17 +271,22 @@ PostgreSQL
 
 ### HUD 样式调整
 
-编辑 `src/hud.swift` 后重新编译：
+无需重新编译，在 `~/.config/vinput.conf` 里设置即可，下次触发就生效：
 
-| 想改 | 编辑 |
-|---|---|
-| HUD 字体大小 | `NSFont.systemFont(ofSize: 26, ...)` |
-| HUD 高度 | `windowHeight: CGFloat = 96` |
-| 距底部距离 | `screenFrame.height * 0.18` |
-| 圆角弧度 | `cornerRadius = 20` |
+| 配置项 | 默认 | 说明 |
+|---|---|---|
+| `HUD_Y_PERCENT` | `18` | 距屏幕底部百分比（0=贴底 / 50=正中 / 100=贴顶） |
+| `HUD_HEIGHT` | `96` | 窗口高度（像素） |
+| `HUD_FONT_SIZE` | `26` | 字号 |
+| `HUD_FONT_WEIGHT` | `semibold` | `ultraLight`/`thin`/`light`/`regular`/`medium`/`semibold`/`bold`/`heavy`/`black` |
+| `HUD_CORNER_RADIUS` | `20` | 圆角弧度 |
+| `HUD_MATERIAL` | `hudWindow` | 毛玻璃风格：`hudWindow`/`sidebar`/`popover`/`menu`/…（详见 `NSVisualEffectView.Material`） |
+| `HUD_WIDTH_MIN` | `220` | 自适应宽度下限 |
+| `HUD_WIDTH_MAX` | `900` | 自适应宽度上限 |
 
+也支持单次临时覆盖（不动配置文件）：
 ```bash
-swiftc -O src/hud.swift -o ~/.whisper_models/hud
+HUD_Y_PERCENT=50 HUD_FONT_SIZE=36 ~/.whisper_models/hud "测试样式" 2
 ```
 
 ---

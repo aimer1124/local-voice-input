@@ -31,6 +31,12 @@ HOTWORDS_FILE="${HOTWORDS_FILE:-$HOME/.config/vinput_hotwords.txt}"
 
 # 屏幕中央 HUD（替代右上角通知）
 HUD_BIN="${HUD_BIN:-$HOME/.whisper_models/hud}"
+
+# 把 HUD_* 样式变量导出到环境，让子进程 hud 二进制能读到
+# 任何未设置的会被 hud.swift 用内置默认值兜底
+export HUD_Y_PERCENT HUD_HEIGHT HUD_FONT_SIZE HUD_FONT_WEIGHT \
+       HUD_CORNER_RADIUS HUD_MATERIAL HUD_WIDTH_MIN HUD_WIDTH_MAX
+
 hud() {
     local msg="$1"
     local dur="${2:-2.0}"

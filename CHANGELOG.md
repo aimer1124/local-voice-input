@@ -16,6 +16,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 - **`bin/vinput`** CLI dispatcher — single entry point for meta commands;
   does *not* trigger recording. Real voice input still goes through Raycast →
   `vinput_bg.sh` exactly as before.
+- **HUD style configurability** — position, height, font size/weight, corner
+  radius, visual material, and width clamping are now overridable via env vars
+  (typically set in `vinput.conf`). No recompile needed. (closes #3)
 
 See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer1124/local-voice-input/milestones) for what's planned next.
 
