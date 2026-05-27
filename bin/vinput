@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.1.0-dev"
+VERSION="1.1.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 
 # ── 默认路径（可被 ~/.config/vinput.conf 覆盖）────────────

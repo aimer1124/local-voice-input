@@ -8,19 +8,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ## [Unreleased]
 
-### Added
-- **`vinput --doctor`** diagnostic command — checks toolchain, resources, runtime
-  state, default audio device, and runs a 3-second mic test. Reports failures
-  with concrete fix suggestions. (closes #2)
-- **`vinput --version`** flag — prints version + git short SHA + repo URL. (closes #5)
-- **`bin/vinput`** CLI dispatcher — single entry point for meta commands;
-  does *not* trigger recording. Real voice input still goes through Raycast →
-  `vinput_bg.sh` exactly as before.
-- **HUD style configurability** — position, height, font size/weight, corner
-  radius, visual material, and width clamping are now overridable via env vars
-  (typically set in `vinput.conf`). No recompile needed. (closes #3)
-
 See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer1124/local-voice-input/milestones) for what's planned next.
+
+---
+
+## [1.1.0] — 2026-05-27
+
+UX polish milestone — demo, diagnostics, configurable HUD.
+
+### Added
+- **Demo GIF** in README top, with subtitle overlay pipeline using Pillow
+  (since `brew ffmpeg` ships without `drawtext`). `scripts/make-demo-gif.sh`
+  + `scripts/overlay_captions.py` handle the conversion with auto-installed
+  deps and CJK font fallback chain. (closes #1)
+- **`vinput --doctor`** diagnostic command — checks toolchain, resources,
+  runtime state, default audio device, and runs a 3-second mic test.
+  Reports failures with concrete fix suggestions; smart-detects the
+  "wired headphones routed to phantom mic" scenario. (closes #2)
+- **`vinput --version`** flag — prints version + git short SHA + repo URL.
+  (closes #5)
+- **`bin/vinput`** CLI dispatcher — single entry point for meta commands;
+  does *not* trigger recording (avoids accidental triggers from terminal
+  typos). Real voice input still goes through Raycast → `vinput_bg.sh`.
+- **HUD style configurability** — eight aspects of the screen-center HUD
+  (position, height, font size/weight, corner radius, visual material,
+  width clamping) are now overridable via env vars typically set in
+  `vinput.conf`. No recompile needed. (closes #3)
+
+### Changed
+- `install.sh` now also deploys `bin/vinput` and prints an alias suggestion
+- `uninstall.sh` cleans up `vinput` binary
+- README "故障排查" / Troubleshooting now leads with `vinput --doctor`
+- HUD style section in README replaces recompile recipe with config table
 
 ---
 
@@ -65,7 +84,8 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/aimer1124/local-voice-input/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/aimer1124/local-voice-input/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/aimer1124/local-voice-input/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/aimer1124/local-voice-input/releases/tag/v1.0.0
