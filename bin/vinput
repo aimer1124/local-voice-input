@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
@@ -333,14 +333,20 @@ cmd_setup() {
 
     # ─── Raycast 脚本 ───
     section "5/6 Raycast 命令脚本"
-    local raycast_src="$root/raycast/voice-input.sh"
-    local raycast_dst="$HOME/.config/raycast-scripts/voice-input.sh"
-    if [ -f "$raycast_src" ]; then
-        mkdir -p "$(dirname "$raycast_dst")"
-        cp "$raycast_src" "$raycast_dst"
-        chmod +x "$raycast_dst"
-        ok "Raycast 脚本  $raycast_dst"
-    else
+    local raycast_dir="$HOME/.config/raycast-scripts"
+    mkdir -p "$raycast_dir"
+    local installed=0
+    for rs in voice-input.sh voice-input-raw.sh; do
+        local raycast_src="$root/raycast/$rs"
+        local raycast_dst="$raycast_dir/$rs"
+        if [ -f "$raycast_src" ]; then
+            cp "$raycast_src" "$raycast_dst"
+            chmod +x "$raycast_dst"
+            ok "Raycast 脚本  $raycast_dst"
+            installed=$((installed + 1))
+        fi
+    done
+    if [ "$installed" = "0" ]; then
         warn "未找到 Raycast 模板，跳过"
     fi
 
@@ -373,7 +379,9 @@ ${G}✓ 安装就绪${N}
   ${C}2.${N} 系统设置 → 隐私 → 辅助功能      ✅ Raycast（自动 ⌘V 用）
   ${C}3.${N} Raycast → Extensions → Script Commands
        添加目录: ~/.config/raycast-scripts
-       给 "🎙️ 语音输入" 绑快捷键（推荐 ⌘⇧Space）
+       绑快捷键:
+         🎙️ 语音输入        ⌘⇧Space  完整流水线（Whisper + LLM）
+         📝 语音输入 (Raw)  ⌥Space    只跑 Whisper，跳过 LLM 整形
 
 可选：把 ${C}alias vinput="$(command -v vinput || echo vinput)"${N} 加到 ~/.zshrc
 验证：${C}vinput --doctor${N}

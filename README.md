@@ -393,19 +393,21 @@ ollama pull qwen2.5:1.5b
 
 ---
 
-## 🧪 ASR 回归测试
+## 🧪 回归测试（pre-tag 必跑）
 
-修改 `bin/vinput_bg.sh`、Whisper 参数或 `config/*` 之前，**先跑回归套件**：
+三层 ASR 流水线 = 三组测试套件 + 一个 lint：
 
-```bash
-bash tests/asr/run.sh
-```
+| 层 | 套件 | 命令 | 价值 |
+|---|---|---|---|
+| Whisper 转写 | [`tests/asr/`](./tests/asr/) | `bash tests/asr/run.sh` | 6 条 TTS 音频 + CER 预算 |
+| 谐音纠错 | （数据驱动，无需测） | `vinput corrections` | TSV 即真值 |
+| LLM 整形 | [`tests/llm/`](./tests/llm/) | `bash tests/llm/run.sh` | 6 个 case + 必含/绝不含约束 |
+| 防御性 | `scripts/lint-shell.sh` | `bash scripts/lint-shell.sh` | grep `$VAR<非ASCII>` set -u 陷阱 |
 
-6 条固定 TTS 音频（不同语速 / 信噪比 / 中英文混合）+ CER 预算 + 退出码 gate。详见
-[tests/asr/README.md](./tests/asr/README.md)。
+修改 `bin/vinput_bg.sh`、Whisper/LLM 参数、`config/*` 之前**必须跑**对应层。退出码 0 才能 tag。
 
-> 为什么：v1.1.3 → v1.1.7 四个 hotfix 都是「改 ASR 参数没回归」的产物。这套件就是为了
-> 防止同类事故再发生。
+> 为什么：v1.1.3 → v1.1.7 四个 hotfix 都是「改了 ASR 参数没回归」的产物。v1.1.5 / v1.1.8 又
+> 是 `set -u` 中文括号陷阱。这套基建直接挡掉这两个 bug class。
 
 ## 🤝 贡献
 

@@ -109,6 +109,66 @@ apply_corrections() {
     fi
 }
 
+# ──────────────────────────────────────────────────────────────
+# LLM 整形（#21）— 给定 raw Whisper 文本，调 Ollama 返回去噪后的指令。
+# 失败/空响应时返回原文（永不丢用户输入）。
+#
+# Prompt 的迭代有 tests/llm/ 套件 gate：改这里之前先跑 bash tests/llm/run.sh。
+# ──────────────────────────────────────────────────────────────
+clean_with_llm() {
+    local raw="$1"
+    local llm_prompt payload response_json cleaned
+
+    llm_prompt="你是一个口语 → 书面指令的提炼器。把下面用户的口语碎碎念清理成简洁、准确的书面指令。
+
+【硬规则】
+1. 删除语气词和无意义重复（嗯、那个、就是、我想说的是…）。
+2. 若说话人中途自我纠正（"啊不对，应该是…"），只保留最终意图，丢弃被纠正的部分。
+3. **绝对保留数字、否定词、专有名词**：'5个按钮' 不能变成 '几个按钮'；'不要硬编码' 不能变成 '硬编码'；'src/lib' 不能变成 'src 库'。
+4. **绝对不要生成代码块**：用户说"写一个组件"——你输出的是\"写一个 React 组件 UserList 渲染 props 数组\"这样的指令，**不是** \`\`\`function UserList() {...} \`\`\`。
+5. 保留列表结构（'第一…第二…第三…' 或'1.…2.…3.…'）。
+6. 严禁输出任何解释、寒暄、'以下是清理后的指令'之类的引导语。**只输出最终文本本身**。
+
+【示例】
+输入: 嗯，那个，我想说的是，帮我改一下这个函数，让它返回数组
+输出: 把这个函数改成返回数组
+
+输入: 把它先放到 utils 目录下，啊不对，应该是放到 src/lib 目录下
+输出: 把它放到 src/lib 目录下
+
+输入: 帮我写一个 React 组件叫 UserList，从 props 接收数组并渲染列表
+输出: 写一个 React 组件 UserList，从 props 接收数组并渲染列表
+
+输入: 把页面上的 5 个按钮去掉吧
+输出: 把页面上的 5 个按钮去掉
+
+输入: 记得不要把数据库密码硬编码到代码里
+输出: 不要把数据库密码硬编码到代码里
+
+【现在轮到你】
+输入: ${raw}
+输出:"
+
+    payload=$(jq -n \
+        --arg model "$OLLAMA_MODEL" \
+        --arg prompt "$llm_prompt" \
+        --arg keep_alive "30m" \
+        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive}')
+
+    response_json=$(curl -s -X POST "$OLLAMA_URL/api/generate" \
+        -H "Content-Type: application/json" \
+        -d "$payload")
+
+    cleaned=$(echo "$response_json" | jq -r '.response // empty' \
+              | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+
+    if [ -z "$cleaned" ]; then
+        printf '%s' "$raw"
+    else
+        printf '%s' "$cleaned"
+    fi
+}
+
 hud() {
     local msg="$1"
     local dur="${2:-2.0}"
@@ -133,6 +193,13 @@ hud() {
 # Keep this branch in sync with the production whisper-cli invocation below —
 # both should call the same flags + prompt. The regression suite depends on it.
 # ──────────────────────────────────────────────────────────────
+if [ "${1:-}" = "--test-llm-clean" ] && [ -n "${2:-}" ]; then
+    # tests/llm/run.sh 用：直接喂文本，返回 LLM 整形后的输出。
+    clean_with_llm "$2"
+    echo
+    exit 0
+fi
+
 if [ "${1:-}" = "--test-transcribe" ] && [ -n "${2:-}" ]; then
     test_wav="$2"
     [ ! -f "$test_wav" ] && { echo "vinput_bg: no such wav: $test_wav" >&2; exit 2; }
@@ -321,36 +388,12 @@ RAW_RESULT=$(apply_corrections "$RAW_RESULT")
 # 短文本阈值（v1.1.3）：用 wc -m 数字符数（中文 1 字 = 1），不再用字节数。
 # 默认 8 字 ≈ 中文短指令的下限（"删除多余文件" 6 字仍走 LLM，"取消" 2 字跳过）。
 RAW_CHARS=$(printf %s "$RAW_RESULT" | wc -m | tr -d ' ')
-if [ "$RAW_CHARS" -lt "$SHORT_TEXT_THRESHOLD" ]; then
+if [ "${VINPUT_RAW:-0}" = "1" ] || [ "$RAW_CHARS" -lt "$SHORT_TEXT_THRESHOLD" ]; then
+    # Raw mode (#22) 或短文本：跳过 LLM 整形，直接用 Whisper 输出。
     CLEANED_RESULT="$RAW_RESULT"
 else
     hud "🤖 AI 润色中..." 30
-
-    LLM_PROMPT="你是一个高效率的程序员指令提炼器。请将下面这段口语碎碎念进行去噪。
-
-规则：
-1. 过滤所有语气词。
-2. 如果说话人中途自我纠正，请只保留最终正确意图。
-3. 将口语表达转化为书面、具有逻辑性的硬核 Prompt 格式，不要生成大段代码。
-4. 严格禁止输出任何解释、寒暄，直接输出提炼后的最终文本。
-
-输入文本：$RAW_RESULT"
-
-    PAYLOAD=$(jq -n \
-        --arg model "$OLLAMA_MODEL" \
-        --arg prompt "$LLM_PROMPT" \
-        --arg keep_alive "30m" \
-        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive}')
-
-    RESPONSE_JSON=$(curl -s -X POST "$OLLAMA_URL/api/generate" \
-        -H "Content-Type: application/json" \
-        -d "$PAYLOAD")
-
-    CLEANED_RESULT=$(echo "$RESPONSE_JSON" | jq -r '.response // empty' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-
-    if [ -z "$CLEANED_RESULT" ]; then
-        CLEANED_RESULT="$RAW_RESULT"
-    fi
+    CLEANED_RESULT=$(clean_with_llm "$RAW_RESULT")
 fi
 
 printf '%s' "$CLEANED_RESULT" | pbcopy

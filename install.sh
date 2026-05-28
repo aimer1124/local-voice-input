@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -142,8 +142,10 @@ if [ ! -f "$CONFIG_DIR/vinput_corrections.tsv" ]; then
 fi
 
 mkdir -p "$RAYCAST_DIR"
-cp "$REPO_DIR/raycast/voice-input.sh" "$RAYCAST_DIR/voice-input.sh"
-chmod +x "$RAYCAST_DIR/voice-input.sh"
+for rs in voice-input.sh voice-input-raw.sh; do
+    cp "$REPO_DIR/raycast/$rs" "$RAYCAST_DIR/$rs"
+    chmod +x "$RAYCAST_DIR/$rs"
+done
 ok "Raycast 命令脚本就位"
 
 # ── 8. 预热 ──────────────────────────────────────────
@@ -171,7 +173,8 @@ cat <<'EOF'
 3️⃣  在 Raycast 里绑定快捷键
    - 打开 Raycast Settings → Extensions → Script Commands
    - 添加目录：~/.config/raycast-scripts
-   - 给 "🎙️ 语音输入" 命令绑快捷键（推荐 ⌘⇧Space）
+   - "🎙️ 语音输入"        绑 ⌘⇧Space   完整流水线（Whisper + LLM 整形）
+   - "📝 语音输入 (Raw)"  绑 ⌥Space     只跑 Whisper，跳过 LLM（短指令 / 原文转写）
 
 完成后，按你设的快捷键即可开始使用！
 

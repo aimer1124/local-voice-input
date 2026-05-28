@@ -12,6 +12,59 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.3.0] — 2026-05-28
+
+Minor — closes three v1.3.0 milestone items (#21, #22) plus a defensive
+infrastructure item (bash lint). The LLM cleanup stage is now under
+regression coverage — together with v1.2.0's ASR suite and correction
+table, all three transcription stages (Whisper → corrections → LLM) now
+have automated guards.
+
+### Added
+- **LLM cleanup regression suite** — `tests/llm/` with 6 cases covering
+  number preservation, negation preservation, no-code-output, filler
+  removal, self-correction handling, and list preservation. Each case is
+  three files (`.input.txt` / `.must_contain.txt` / `.must_not_contain.txt`)
+  using contract-style assertions instead of fragile string matching.
+  Run: `bash tests/llm/run.sh`.
+- **LLM cleanup refactored into `clean_with_llm()` function** —
+  `bin/vinput_bg.sh` no longer inlines the Ollama call. Production path
+  and the new `--test-llm-clean <text>` test path share one
+  implementation, so the regression suite measures the same code that
+  ships.
+- **Few-shot LLM prompt (#21)** — replaces the rule-only prompt with five
+  worked examples covering each defect pattern from the issue. Explicitly
+  guards numbers, negations, proper nouns, list structure, and forbids
+  code-block output. All 6 regression cases pass on qwen2.5:3b.
+- **Raw mode (#22)** — `📝 语音输入 (Raw)` Raycast script and
+  `VINPUT_RAW=1` env var: skip the LLM stage, paste Whisper output as-is.
+  Recommended binding: `⌥+Space` (complements the default `⌘⇧Space`).
+  Use for short commands, original transcription preservation, or when
+  the LLM over-cleans.
+- **Bash lint (`scripts/lint-shell.sh` + CI)** — grep for the
+  `$IDENT<non-ASCII>` pattern that bit us in v1.1.5, v1.1.8, and earlier.
+  Bash treats `$HOTWORDS_FILE（` as one identifier under `set -u`; the
+  lint fails on this pattern across `bin/`, `scripts/`, `raycast/`,
+  `tests/`, and `install.sh`. Lines containing `lint-shell:disable` are
+  skipped (for literal documentation of the anti-pattern). Wired into
+  GitHub Actions (`.github/workflows/lint.yml`) on every push and PR.
+
+### Fixed
+- `scripts/make-demo-gif.sh:84` had `$dep，` (Chinese comma) — would have
+  crashed under `set -u`. Caught by the new lint.
+
+### Notes
+- **Three layers, three guards** — Whisper layer is gated by
+  `tests/asr/`, corrections layer is data-only (no test needed), LLM
+  layer is gated by `tests/llm/`. Together they form a hermetic
+  pre-tag check: `bash tests/asr/run.sh && bash tests/llm/run.sh`.
+- **The lint script is itself a project lesson** — three hotfixes (one
+  per release) ate two hours of debugging. A 50-line grep prevents that
+  entire bug class. The cost/benefit ratio for defensive infrastructure
+  is the highest of any work in this release.
+
+---
+
 ## [1.2.0] — 2026-05-27
 
 Minor — adds the **regression test suite** (#24) and **phonetic correction
@@ -306,7 +359,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/aimer1124/local-voice-input/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/aimer1124/local-voice-input/compare/v1.1.8...v1.2.0
 [1.1.8]: https://github.com/aimer1124/local-voice-input/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/aimer1124/local-voice-input/compare/v1.1.6...v1.1.7

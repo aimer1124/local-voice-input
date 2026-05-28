@@ -81,7 +81,7 @@ ok "找到输入: $INPUT ($(du -h "$INPUT" | cut -f1))"
 # ── 依赖检查 ──────────────────────────────────────────
 for dep in ffmpeg gifski; do
     if ! command -v "$dep" &>/dev/null; then
-        warn "未安装 $dep，自动 brew install..."
+        warn "未安装 ${dep}，自动 brew install..."
         brew install "$dep"
     fi
 done
