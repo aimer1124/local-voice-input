@@ -393,6 +393,27 @@ ollama pull qwen2.5:1.5b
 
 ---
 
+## 📜 转写历史 & 错词挖掘
+
+每次成功转写都会 append 到 `~/.cache/vinput/history.jsonl`（纯本地，纯文本）。
+
+```bash
+vinput history                  # 最近 20 条彩色表格
+vinput history --tail 100       # 最近 100 条
+vinput history --grep qwen      # 搜索（在 raw/corrected/cleaned 三列）
+vinput history --raw-only       # 只看原始 Whisper 输出（便于 grep 错词）
+```
+
+发现错词后一条命令补进纠错表：
+
+```bash
+vinput add-correction "Claude Code" "克劳德 code"
+```
+
+> 隐私：日志只在本地，永不出机。要清空就 `rm ~/.cache/vinput/history.jsonl`。
+
+---
+
 ## 🧪 回归测试（pre-tag 必跑）
 
 三层 ASR 流水线 = 三组测试套件 + 一个 lint：

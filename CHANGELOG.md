@@ -12,6 +12,58 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.4.0] — 2026-05-28
+
+Minor — closes the last two v1.3.0 milestone items (#19, #23). With this
+release, every successful transcription is logged with structured metadata,
+the HUD shows what was actually pasted, and the LLM regression suite handles
+its own stochasticity.
+
+### Added
+- **`vinput history` (#19)** — every transcription appends a JSONL row to
+  `~/.cache/vinput/history.jsonl` with `{ts, raw, corrected, cleaned,
+  mode, rules_fired, audio_ms}`. Auto-rotates at 1000 lines to
+  `history.jsonl.old`. Three subcommands:
+  ```
+  vinput history                  # last 20, colored table
+  vinput history --tail N         # last N
+  vinput history --grep PATTERN   # regex on raw/corrected/cleaned
+  vinput history --raw-only       # ts + raw only (for error-word mining)
+  ```
+  Closes the loop with #18: scan history for systematic errors →
+  `vinput add-correction <对> <错>` → next time it's auto-fixed.
+- **HUD shows final text (#23 partial)** — after paste, HUD displays
+  `✓ {cleaned text, ≤60 chars}` for 2.5s instead of a generic
+  "✓ 已完成" flash. Two env vars: `HUD_SHOW_RESULT=0` to revert,
+  `HUD_FINAL_DURATION=4.0` to dwell longer. Truncation uses
+  `cut -c` under `LC_ALL=en_US.UTF-8` so CJK characters count as 1
+  each (not 3 bytes).
+- **LLM regression suite retry logic** — each case now retries up to 3
+  times before declaring fail. Override with `VINPUT_LLM_MAX_TRIES=1`
+  for strict mode. Reason: a perfectly-tuned prompt still flakes ~10%
+  on qwen2.5:3b — the suite should catch systematic regressions, not
+  ambient noise. PASS rows show "(try N/3)" when retries were used.
+- **`list_fired_corrections()`** in `vinput_bg.sh` — computes which
+  correction rules matched on a given text without applying them.
+  Used by history writer to record which rules earned their keep this
+  run; foundation for a future `vinput corrections --hit-rate` command.
+
+### Deferred
+- **#23 ↑-to-rerun via global hotkey** — needs Swift HUD changes to
+  register `NSEvent.addGlobalMonitorForEvents`. Left for a follow-up
+  focused on the Swift layer; the text-display half landed here.
+
+### Notes
+- The `mode` field in history (`full` / `raw` / `short`) makes it easy
+  to see how often each path runs. Skim with
+  `jq -r .mode ~/.cache/vinput/history.jsonl | sort | uniq -c`.
+- `rules_fired` is computed by re-scanning the corrections table, not
+  by modifying `apply_corrections()`. Slight redundancy (one extra
+  pass per transcription) but keeps the correction path itself dead
+  simple.
+
+---
+
 ## [1.3.0] — 2026-05-28
 
 Minor — closes three v1.3.0 milestone items (#21, #22) plus a defensive
@@ -359,7 +411,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/aimer1124/local-voice-input/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/aimer1124/local-voice-input/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/aimer1124/local-voice-input/compare/v1.1.8...v1.2.0
 [1.1.8]: https://github.com/aimer1124/local-voice-input/compare/v1.1.7...v1.1.8

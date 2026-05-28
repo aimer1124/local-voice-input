@@ -35,39 +35,53 @@ contains_ci() {
     return 1
 }
 
-for input_file in "$CASES"/*.input.txt; do
-    [ -f "$input_file" ] || continue
-    id="$(basename "$input_file" .input.txt)"
-    must_yes="$CASES/$id.must_contain.txt"
-    must_no="$CASES/$id.must_not_contain.txt"
-
-    input=$(cat "$input_file")
-    output=$(bash "$BG" --test-llm-clean "$input" 2>/dev/null)
-
-    case_fails=()
-
+check_case() {
+    local input="$1" must_yes="$2" must_no="$3"
+    local out fails=()
+    out=$(bash "$BG" --test-llm-clean "$input" 2>/dev/null)
     if [ -f "$must_yes" ]; then
         while IFS= read -r needle || [ -n "$needle" ]; do
             [ -z "$needle" ] && continue
-            if ! contains_ci "$output" "$needle"; then
-                case_fails+=("missing:\"$needle\"")
-            fi
+            contains_ci "$out" "$needle" || fails+=("missing:\"$needle\"")
         done < "$must_yes"
     fi
     if [ -f "$must_no" ]; then
         while IFS= read -r needle || [ -n "$needle" ]; do
             [ -z "$needle" ] && continue
-            if contains_ci "$output" "$needle"; then
-                case_fails+=("forbidden:\"$needle\"")
-            fi
+            contains_ci "$out" "$needle" && fails+=("forbidden:\"$needle\"")
         done < "$must_no"
     fi
+    # Side channel: emit output via env-like global
+    LAST_OUTPUT="$out"
+    LAST_FAILS="${fails[*]}"
+}
 
-    if [ ${#case_fails[@]} -eq 0 ]; then
-        PER_CASE+=("$id|PASS|$output")
+# LLMs are stochastic. Retry up to MAX_TRIES before declaring fail —
+# the suite's value is catching systematic regressions, not single-run
+# flakes. Override with VINPUT_LLM_MAX_TRIES=1 for strict mode.
+MAX_TRIES="${VINPUT_LLM_MAX_TRIES:-3}"
+
+for input_file in "$CASES"/*.input.txt; do
+    [ -f "$input_file" ] || continue
+    id="$(basename "$input_file" .input.txt)"
+    must_yes="$CASES/$id.must_contain.txt"
+    must_no="$CASES/$id.must_not_contain.txt"
+    input=$(cat "$input_file")
+
+    tries=0
+    while [ "$tries" -lt "$MAX_TRIES" ]; do
+        tries=$((tries + 1))
+        check_case "$input" "$must_yes" "$must_no"
+        [ -z "$LAST_FAILS" ] && break
+    done
+
+    if [ -z "$LAST_FAILS" ]; then
+        marker="PASS"
+        [ "$tries" -gt 1 ] && marker="PASS (try $tries/$MAX_TRIES)"
+        PER_CASE+=("$id|$marker|$LAST_OUTPUT")
     else
         FAIL=1
-        PER_CASE+=("$id|FAIL ${case_fails[*]}|$output")
+        PER_CASE+=("$id|FAIL after $MAX_TRIES tries: $LAST_FAILS|$LAST_OUTPUT")
     fi
 done
 

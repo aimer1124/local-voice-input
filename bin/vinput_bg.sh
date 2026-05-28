@@ -29,6 +29,8 @@ SILENCE_STOP_THRESHOLD="${SILENCE_STOP_THRESHOLD:-6%}"
 MAX_REC_SECONDS="${MAX_REC_SECONDS:-30}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$HOME/.config/vinput_hotwords.txt}"
 CORRECTIONS_FILE="${CORRECTIONS_FILE:-$HOME/.config/vinput_corrections.tsv}"
+HISTORY_FILE="${HISTORY_FILE:-$HOME/.cache/vinput/history.jsonl}"
+HISTORY_MAX_LINES="${HISTORY_MAX_LINES:-1000}"
 
 # Whisper 解码参数 — 任何一项设置为空字符串即跳过对应 flag
 #
@@ -106,6 +108,76 @@ apply_corrections() {
         printf '%s' "$text"
     else
         printf '%s' "$text" | sed "$sed_script"
+    fi
+}
+
+# ──────────────────────────────────────────────────────────────
+# 列出在给定文本上"应该会命中"的纠错规则（用于 history 日志，#19）。
+# 输出每行 "correct\twrong"；空规则集 / 空文本 / 无纠错文件 → 空输出。
+# 注意：是 substring 检查（case-insensitive ASCII），不实际改文本。
+# ──────────────────────────────────────────────────────────────
+list_fired_corrections() {
+    local raw="$1"
+    local file="${CORRECTIONS_FILE:-$HOME/.config/vinput_corrections.tsv}"
+    [ -z "$raw" ] && return 0
+    [ ! -f "$file" ] && return 0
+    local line correct rest wrong raw_lc wrong_lc
+    raw_lc=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in ''|'#'*) continue ;; esac
+        IFS=$'\t' read -r correct rest <<< "$line"
+        [ -z "$correct" ] && continue
+        local IFS=$'\t'
+        for wrong in $rest; do
+            [ -z "$wrong" ] && continue
+            wrong_lc=$(printf '%s' "$wrong" | tr '[:upper:]' '[:lower:]')
+            case "$raw_lc" in
+                *"$wrong_lc"*) printf '%s\t%s\n' "$correct" "$wrong" ;;
+            esac
+        done
+        unset IFS
+    done < "$file"
+}
+
+# ──────────────────────────────────────────────────────────────
+# 历史日志（#19）— 每次成功转写后 append 一行到 history.jsonl。
+# 字段：ts, raw (Whisper 原文), corrected (纠错后), cleaned (LLM 后),
+#       mode (full|raw|short), rules_fired, audio_ms。
+# 文件超 HISTORY_MAX_LINES 时翻转到 .old。
+# ──────────────────────────────────────────────────────────────
+append_history() {
+    local raw_pre="$1" corrected="$2" cleaned="$3" mode="$4" audio_path="$5"
+    [ -z "$cleaned" ] && return 0
+    mkdir -p "$(dirname "$HISTORY_FILE")"
+
+    local audio_ms="0"
+    if [ -f "$audio_path" ] && command -v soxi >/dev/null 2>&1; then
+        audio_ms=$(soxi -D "$audio_path" 2>/dev/null \
+                   | awk '{printf "%d", $1*1000}' \
+                   | head -c 10)
+        [ -z "$audio_ms" ] && audio_ms="0"
+    fi
+
+    local rules_json
+    rules_json=$(list_fired_corrections "$raw_pre" \
+        | awk -F'\t' 'NF==2 {print $1"←"$2}' \
+        | jq -R . | jq -sc .)
+    [ -z "$rules_json" ] && rules_json="[]"
+
+    jq -n -c \
+        --arg ts "$(date +"%Y-%m-%dT%H:%M:%S%z")" \
+        --arg raw "$raw_pre" \
+        --arg corrected "$corrected" \
+        --arg cleaned "$cleaned" \
+        --arg mode "$mode" \
+        --argjson rules_fired "$rules_json" \
+        --argjson audio_ms "$audio_ms" \
+        '{ts:$ts, raw:$raw, corrected:$corrected, cleaned:$cleaned, mode:$mode, rules_fired:$rules_fired, audio_ms:$audio_ms}' \
+        >> "$HISTORY_FILE"
+
+    # 轮转：超过上限时把当前切走，开新文件
+    if [ "$(wc -l < "$HISTORY_FILE" 2>/dev/null || echo 0)" -gt "$HISTORY_MAX_LINES" ]; then
+        mv "$HISTORY_FILE" "${HISTORY_FILE}.old"
     fi
 }
 
@@ -380,6 +452,9 @@ if [ -z "$RAW_RESULT" ] || [ ${#RAW_RESULT} -le 2 ]; then
     exit 1
 fi
 
+# 保留 pre-correction 副本，给 history.jsonl 用（看哪条规则在这次转写中救了场）
+RAW_PRE_CORRECTIONS="$RAW_RESULT"
+
 # 谐音/同音纠错（#18）：在 LLM 整形前先打用户自维护的纠错表。
 # Whisper 中文模型对英文产品名（Claude/Cloud、Cursor/Cursors）极易混淆，
 # 这些 LLM 也救不回来（语义上下文一样），只能靠用户级映射表根治。
@@ -388,10 +463,14 @@ RAW_RESULT=$(apply_corrections "$RAW_RESULT")
 # 短文本阈值（v1.1.3）：用 wc -m 数字符数（中文 1 字 = 1），不再用字节数。
 # 默认 8 字 ≈ 中文短指令的下限（"删除多余文件" 6 字仍走 LLM，"取消" 2 字跳过）。
 RAW_CHARS=$(printf %s "$RAW_RESULT" | wc -m | tr -d ' ')
-if [ "${VINPUT_RAW:-0}" = "1" ] || [ "$RAW_CHARS" -lt "$SHORT_TEXT_THRESHOLD" ]; then
-    # Raw mode (#22) 或短文本：跳过 LLM 整形，直接用 Whisper 输出。
+if [ "${VINPUT_RAW:-0}" = "1" ]; then
+    MODE="raw"
+    CLEANED_RESULT="$RAW_RESULT"
+elif [ "$RAW_CHARS" -lt "$SHORT_TEXT_THRESHOLD" ]; then
+    MODE="short"
     CLEANED_RESULT="$RAW_RESULT"
 else
+    MODE="full"
     hud "🤖 AI 润色中..." 30
     CLEANED_RESULT=$(clean_with_llm "$RAW_RESULT")
 fi
@@ -414,4 +493,18 @@ if [ "$USE_RECENT_PROMPT" = "1" ] && [ -n "$RAW_RESULT" ]; then
     fi
 fi
 
-hud "✓ 已完成" 1.2
+# 历史日志（#19）— 不影响主流程，失败也不报错
+append_history "$RAW_PRE_CORRECTIONS" "$RAW_RESULT" "$CLEANED_RESULT" "$MODE" "$AUDIO_PATH" 2>/dev/null || true
+
+# HUD 最终态（#23）— 显示真正粘贴的内容（截断 60 字），给用户视觉确认
+HUD_SHOW_RESULT="${HUD_SHOW_RESULT:-1}"
+HUD_FINAL_DURATION="${HUD_FINAL_DURATION:-2.5}"
+if [ "$HUD_SHOW_RESULT" = "1" ] && [ -n "$CLEANED_RESULT" ]; then
+    # 按字符截断（中文 1 字 = 1），不按字节。LC_ALL 让 cut/wc 按 UTF-8 计数。
+    HUD_TEXT=$(printf '%s' "$CLEANED_RESULT" | LC_ALL=en_US.UTF-8 cut -c1-60)
+    CLEAN_CHARS=$(printf '%s' "$CLEANED_RESULT" | LC_ALL=en_US.UTF-8 wc -m | tr -d ' ')
+    [ "$CLEAN_CHARS" -gt 60 ] && HUD_TEXT="${HUD_TEXT}…"
+    hud "✓ ${HUD_TEXT}" "$HUD_FINAL_DURATION"
+else
+    hud "✓ 已完成" 1.2
+fi

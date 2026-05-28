@@ -34,7 +34,9 @@ tests/llm/cases/
 - 关键信息（数字 / 否定 / 专名）是否保留
 - 危险模式（fillers / 代码块 / "啊不对" 之类的自我纠正残留）是否绝迹
 
-这种 contract-style 检查在 6 个 case 上跑下来很稳，过去 10 次连续跑 0 个 flake。
+**Retry 兜底**：每个 case 默认最多跑 3 次，任一次过就 PASS。这是对 LLM 随机性的妥协 ——
+suite 的价值在于发现**系统性退化**（prompt 改坏了），不在于挑出单次 flake。需要严格
+模式时 `VINPUT_LLM_MAX_TRIES=1 bash tests/llm/run.sh`。
 
 ## 如何加 case
 

@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.3.0"
+VERSION="1.4.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
@@ -22,6 +22,7 @@ OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:3b}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$CONFIG_DIR/vinput_hotwords.txt}"
 CORRECTIONS_FILE="${CORRECTIONS_FILE:-$CONFIG_DIR/vinput_corrections.tsv}"
+HISTORY_FILE="${HISTORY_FILE:-$HOME/.cache/vinput/history.jsonl}"
 HUD_BIN="${HUD_BIN:-$WHISPER_DIR/hud}"
 
 # ── 输出工具（颜色 + 段落标题）─────────────────────────
@@ -537,6 +538,90 @@ cmd_remove_correction() {
     fi
 }
 
+# ── history (#19) ──────────────────────────────────────
+# 看转写历史。每条记录 = 一次成功转写，由 vinput_bg.sh 写入 history.jsonl。
+# 用法:
+#   vinput history                 # 最近 20 条（彩色表格）
+#   vinput history --tail 50       # 最近 50 条
+#   vinput history --grep PATTERN  # 在 raw/corrected/cleaned 三个字段里 grep
+#   vinput history --raw-only      # 只显示 ts + raw 一栏（便于挖错词）
+cmd_history() {
+    local n=20 grep_pat="" raw_only=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --tail|-n)   shift; n="${1:-20}" ;;
+            --grep|-g)   shift; grep_pat="${1:-}" ;;
+            --raw-only)  raw_only=1 ;;
+            --help|-h)
+                cat <<'EOF'
+vinput history — 看历史转写
+
+  --tail N        显示最近 N 条（默认 20）
+  --grep PATTERN  在 raw/corrected/cleaned 字段里正则匹配
+  --raw-only      只输出 ts + raw 一列（便于 grep / 挖错词）
+
+提示：发现错词后用 vinput add-correction <对> <错> 加入纠错表。
+EOF
+                return 0
+                ;;
+            *) err "未知参数: $1"; exit 2 ;;
+        esac
+        shift
+    done
+
+    if [ ! -f "$HISTORY_FILE" ]; then
+        warn "无历史记录: ${HISTORY_FILE}"
+        hint "触发一次 Raycast 语音输入后再回来。"
+        return 0
+    fi
+
+    # 过滤
+    local lines
+    if [ -n "$grep_pat" ]; then
+        # grep 在原 JSONL 上做（每行是一个 JSON 对象，所有字段都是 string），用 -E
+        lines=$(grep -E "$grep_pat" "$HISTORY_FILE" 2>/dev/null | tail -n "$n")
+    else
+        lines=$(tail -n "$n" "$HISTORY_FILE")
+    fi
+
+    if [ -z "$lines" ]; then
+        warn "无匹配记录"
+        return 0
+    fi
+
+    if [ "$raw_only" = "1" ]; then
+        # 单行格式：ts  raw
+        echo "$lines" | jq -r '.ts + "  " + .raw'
+        return 0
+    fi
+
+    section "vinput history (${HISTORY_FILE})"
+
+    # 逐条彩色渲染
+    echo "$lines" | while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local ts raw corrected cleaned mode rules audio_ms
+        ts=$(printf '%s' "$line" | jq -r '.ts // ""')
+        raw=$(printf '%s' "$line" | jq -r '.raw // ""')
+        corrected=$(printf '%s' "$line" | jq -r '.corrected // ""')
+        cleaned=$(printf '%s' "$line" | jq -r '.cleaned // ""')
+        mode=$(printf '%s' "$line" | jq -r '.mode // "?"')
+        rules=$(printf '%s' "$line" | jq -r '.rules_fired // [] | join(", ")')
+        audio_ms=$(printf '%s' "$line" | jq -r '.audio_ms // 0')
+
+        printf "${C}%s${N}  [%s, %sms audio]\n" "$ts" "$mode" "$audio_ms"
+        printf "  raw      : %s\n" "$raw"
+        if [ -n "$rules" ]; then
+            printf "  ${Y}✎ rules${N}  : %s\n" "$rules"
+            printf "  corrected: %s\n" "$corrected"
+        fi
+        if [ "$corrected" != "$cleaned" ]; then
+            printf "  ${G}cleaned${N}  : %s\n" "$cleaned"
+        fi
+        echo
+    done
+}
+
 # ── --help ────────────────────────────────────────────
 cmd_help() {
     cat <<EOF
@@ -549,6 +634,7 @@ vinput — local-voice-input CLI ($VERSION)
   vinput corrections                        列出所有谐音纠错规则
   vinput add-correction <对> <错>           追加一条纠错（自动去重）
   vinput remove-correction <对> <错>        删除一条
+  vinput history [--tail N | --grep PAT]   查看转写历史（默认最近 20 条）
   vinput --help                             显示此帮助
 
 触发语音输入：
@@ -568,6 +654,7 @@ case "${1:-help}" in
     corrections)                  cmd_corrections ;;
     add-correction)               shift; cmd_add_correction "$@" ;;
     remove-correction)            shift; cmd_remove_correction "$@" ;;
+    history)                      shift; cmd_history "$@" ;;
     --help|-h|help|"")            cmd_help ;;
     *)
         err "未知命令: $1"
