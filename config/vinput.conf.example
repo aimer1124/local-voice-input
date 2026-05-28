@@ -100,3 +100,16 @@ HOTWORDS_FILE="$HOME/.config/vinput_hotwords.txt"
 # 自适应宽度区间（窗口宽度=文字宽+padding，再约束到这个范围）
 # HUD_WIDTH_MIN=220
 # HUD_WIDTH_MAX=900
+
+# ===== HUD 最终态显示（v1.4.0 #23）=====
+# 粘贴后 HUD 显示真正粘贴的内容（截断 60 字）+ 停留 2.5 秒。0 关掉。
+# HUD_SHOW_RESULT=1
+# HUD_FINAL_DURATION=2.5
+
+# ===== HUD ↑ 重录快捷键（v1.5.0 #23 完结）=====
+# 设为 1 后，最终态 HUD 显示期间按 ↑ 立即重新触发一次完整流水线，省得再去按
+# Raycast 快捷键。ESC 永远立刻关闭 HUD。
+#
+# 首次启用需要在 **系统设置 → 隐私 → 输入监控** 里把 hud 二进制（路径见
+# `vinput --doctor`）打勾。没给权限时 HUD 仍正常显示，只是 ↑ 无效。
+# HUD_RERUN_ON_UP=0

@@ -12,6 +12,42 @@ See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer112
 
 ---
 
+## [1.5.0] — 2026-05-28
+
+Minor — closes the last piece of #23. The HUD now optionally responds to
+`↑` (rerun) and `ESC` (early dismiss), so frequent re-takes don't need to
+go through Raycast again.
+
+### Added
+- **HUD ↑-to-rerun (#23 final)** — `HUD_RERUN_ON_UP=1` makes the
+  final-result HUD spawn a fresh `vinput_bg.sh` when the user presses
+  `↑` during its display. ESC always dismisses immediately.
+- **`HUD_ON_UP_CMD` env var** in `src/hud.swift` — when set to any
+  non-empty shell command, the HUD registers an `NSEvent` global key
+  monitor and runs the command via `/bin/bash -lc` on `↑`. Detached
+  child, no FD inheritance.
+- **`vinput.conf.example`** documents `HUD_SHOW_RESULT`,
+  `HUD_FINAL_DURATION`, and `HUD_RERUN_ON_UP` so users can discover
+  and tune the new behavior.
+
+### Notes
+- **Permission ask** — `↑` requires the user to grant the `hud` binary
+  *Input Monitoring* in System Settings → Privacy. Without it, the HUD
+  still displays normally; only `↑` is a no-op. The Swift code writes
+  a hint to stderr (which `vinput_bg.sh` captures into
+  `/tmp/vinput_debug.log`) on registration failure.
+- **Why opt-in** — most users won't want a permission prompt for a
+  convenience feature. Default off; document the toggle in
+  `vinput.conf` and `caveats`.
+- **The whole hotkey path is detached** — when `↑` fires, HUD spawns
+  the new transcription via `Process()` with all FDs set to
+  `FileHandle.nullDevice`, then runs its own dismiss animation. No
+  parent-child wait, no shared state beyond the script's own
+  `/tmp/vinput.lock.d` (which was already cleaned up by the previous
+  invocation's trap before the HUD even showed).
+
+---
+
 ## [1.4.0] — 2026-05-28
 
 Minor — closes the last two v1.3.0 milestone items (#19, #23). With this
@@ -411,7 +447,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/aimer1124/local-voice-input/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/aimer1124/local-voice-input/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/aimer1124/local-voice-input/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/aimer1124/local-voice-input/compare/v1.1.8...v1.2.0

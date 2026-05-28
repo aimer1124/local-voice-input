@@ -13,6 +13,13 @@ import Cocoa
 //                       underWindowBackground/underPageBackground
 //   HUD_WIDTH_MIN      自适应宽度的下限 (默认 220)
 //   HUD_WIDTH_MAX      自适应宽度的上限 (默认 900)
+//
+// 全局键盘 (#23)：
+//   HUD_ON_UP_CMD      非空时注册全局 ↑ 监听；按 ↑ 时把整段 shell 通过 /bin/bash -c 启动
+//                      （仅在 HUD 显示期间生效）。需要系统设置 → 隐私 → 输入监控里把
+//                      hud 二进制打勾，否则首次注册会失败并打到 /tmp/vinput_debug.log。
+//   ESC 永远立即关闭 HUD（不依赖任何权限，因为 ESC 监听走的还是全局监控器，但即使
+//   注册失败也不影响 HUD 本身的自动消失）。
 
 let args = CommandLine.arguments
 guard args.count >= 2 else {
@@ -46,6 +53,7 @@ let cfgCornerRadius  = CGFloat(envInt("HUD_CORNER_RADIUS", 20))
 let cfgMaterial      = envString("HUD_MATERIAL", "hudWindow")
 let cfgWidthMin      = CGFloat(envInt("HUD_WIDTH_MIN", 220))
 let cfgWidthMax      = CGFloat(envInt("HUD_WIDTH_MAX", 900))
+let cfgOnUpCmd       = envString("HUD_ON_UP_CMD", "")
 
 func fontWeight(_ name: String) -> NSFont.Weight {
     switch name.lowercased() {
@@ -99,10 +107,67 @@ class HUDDelegate: NSObject, NSApplicationDelegate {
     let message: String
     let duration: Double
     var window: NSWindow!
+    var monitor: Any?
+    var dismissed = false
 
     init(message: String, duration: Double) {
         self.message = message
         self.duration = duration
+    }
+
+    func dismiss() {
+        if dismissed { return }
+        dismissed = true
+        if let m = monitor {
+            NSEvent.removeMonitor(m)
+            monitor = nil
+        }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.18
+            self.window.animator().alphaValue = 0
+        }, completionHandler: {
+            NSApp.terminate(nil)
+        })
+    }
+
+    func spawnRerun(_ cmd: String) {
+        // 用 /bin/bash -c 启动；detached + 父子无 file-descriptor 继承避免管道泄漏。
+        let task = Process()
+        task.launchPath = "/bin/bash"
+        task.arguments = ["-lc", cmd]
+        task.standardInput = FileHandle.nullDevice
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        do {
+            try task.run()
+        } catch {
+            FileHandle.standardError.write(
+                "hud: failed to spawn rerun: \(error)\n".data(using: .utf8) ?? Data())
+        }
+    }
+
+    func setupKeyboardMonitor() {
+        // 只有 cfgOnUpCmd 非空时才注册 ↑ 监听；ESC 监听跟着开（顺手）。
+        // NSEvent.addGlobalMonitorForEvents 在没拿到 Input Monitoring 权限时返回 nil —
+        // 写到 stderr（最后会被 vinput_debug.log 兜住）然后跳过，不影响 HUD 显示。
+        if cfgOnUpCmd.isEmpty { return }
+        monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, !self.dismissed else { return }
+            switch event.keyCode {
+            case 126:  // ↑
+                self.spawnRerun(cfgOnUpCmd)
+                self.dismiss()
+            case 53:   // ESC
+                self.dismiss()
+            default:
+                break
+            }
+        }
+        if monitor == nil {
+            FileHandle.standardError.write(
+                "hud: NSEvent.addGlobalMonitorForEvents returned nil — grant Input Monitoring permission to the hud binary in System Settings → Privacy → Input Monitoring.\n"
+                .data(using: .utf8) ?? Data())
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -166,14 +231,10 @@ class HUDDelegate: NSObject, NSApplicationDelegate {
             window.animator().alphaValue = 1.0
         })
 
+        setupKeyboardMonitor()
+
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
-            guard let self = self else { return }
-            NSAnimationContext.runAnimationGroup({ ctx in
-                ctx.duration = 0.25
-                self.window.animator().alphaValue = 0
-            }, completionHandler: {
-                NSApp.terminate(nil)
-            })
+            self?.dismiss()
         }
     }
 }

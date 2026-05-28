@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.4.0"
+VERSION="1.5.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"

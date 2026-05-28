@@ -71,7 +71,8 @@ HUD_BIN="${HUD_BIN:-$HOME/.whisper_models/hud}"
 # 把 HUD_* 样式变量导出到环境，让子进程 hud 二进制能读到
 # 任何未设置的会被 hud.swift 用内置默认值兜底
 export HUD_Y_PERCENT HUD_HEIGHT HUD_FONT_SIZE HUD_FONT_WEIGHT \
-       HUD_CORNER_RADIUS HUD_MATERIAL HUD_WIDTH_MIN HUD_WIDTH_MAX
+       HUD_CORNER_RADIUS HUD_MATERIAL HUD_WIDTH_MIN HUD_WIDTH_MAX \
+       HUD_ON_UP_CMD
 
 # ──────────────────────────────────────────────────────────────
 # 谐音/同音纠错表（v1.2.0 #18）— 应用在 Whisper 输出之后、LLM 整形之前。
@@ -504,6 +505,14 @@ if [ "$HUD_SHOW_RESULT" = "1" ] && [ -n "$CLEANED_RESULT" ]; then
     HUD_TEXT=$(printf '%s' "$CLEANED_RESULT" | LC_ALL=en_US.UTF-8 cut -c1-60)
     CLEAN_CHARS=$(printf '%s' "$CLEANED_RESULT" | LC_ALL=en_US.UTF-8 wc -m | tr -d ' ')
     [ "$CLEAN_CHARS" -gt 60 ] && HUD_TEXT="${HUD_TEXT}…"
+
+    # ↑ 重录 (#23)：HUD_RERUN_ON_UP=1 时把当前脚本路径喂给 hud，HUD 在用户按 ↑ 时
+    # 重新启动一次完整流水线。第一次启用需要在系统设置里把 hud 二进制加进输入监控。
+    HUD_RERUN_ON_UP="${HUD_RERUN_ON_UP:-0}"
+    if [ "$HUD_RERUN_ON_UP" = "1" ]; then
+        export HUD_ON_UP_CMD="$0"
+    fi
+
     hud "✓ ${HUD_TEXT}" "$HUD_FINAL_DURATION"
 else
     hud "✓ 已完成" 1.2
