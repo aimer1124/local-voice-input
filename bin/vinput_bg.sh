@@ -259,6 +259,20 @@ hud() {
 }
 
 # ──────────────────────────────────────────────────────────────
+# 录音电平 (#4) — 返回 WAV 的 RMS amplitude（0–1，越大越响），无 sox/无文件返回空。
+# 只在转写为空的失败路径调用：把含糊的「未识别到有效语音」按实际电平升级成可操作
+# 提示。最典型的静默失败是插着只能听的 3 极耳机时，macOS 把输入路由到无信号的耳机口，
+# rec 录到一段死寂 WAV，whisper 吐空 —— 用户却完全不知道是麦克风没接上。
+# 复用 `vinput --doctor` 同款 sox stat 逻辑，成功路径上一次都不跑。
+# ──────────────────────────────────────────────────────────────
+audio_rms() {
+    local wav="$1"
+    [ -f "$wav" ] || return 0
+    command -v sox >/dev/null 2>&1 || return 0
+    sox "$wav" -n stat 2>&1 | awk '/RMS *amplitude/ {print $3; exit}'
+}
+
+# ──────────────────────────────────────────────────────────────
 # Test-only fast path (used by tests/asr/run.sh).
 # Skips lock/HUD/rec/pbcopy: feed a WAV, get the raw Whisper output (after
 # UTF-8 rescue, before LLM cleaning) on stdout. Exits non-zero on empty.
@@ -449,7 +463,17 @@ if ! echo "$RAW_RESULT" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
 fi
 
 if [ -z "$RAW_RESULT" ] || [ ${#RAW_RESULT} -le 2 ]; then
-    hud "❌ 未识别到有效语音" 3
+    # #4 静默失败救援：转写为空时先看录音电平，把含糊的失败提示换成可操作诊断。
+    # 阈值与 `vinput --doctor` 对齐：<=0.002 几乎死寂、<0.01 偏弱、否则信号正常。
+    RMS=$(audio_rms "$AUDIO_PATH")
+    if [ -n "$RMS" ] && awk "BEGIN {exit !($RMS <= 0.002)}"; then
+        hud "🎤 麦克风几乎没声音 — 拔掉无麦耳机，或检查 系统设置 → 声音 → 输入" 5
+    elif [ -n "$RMS" ] && awk "BEGIN {exit !($RMS < 0.01)}"; then
+        hud "🔈 声音太小没听清 — 靠近麦克风，或调大 vinput.conf 里的 SOX_GAIN_DB" 5
+    else
+        # 信号正常却没转出文字：大概率是真没说话 / 纯环境噪声，保留原提示。
+        hud "❌ 未识别到有效语音" 3
+    fi
     exit 1
 fi
 
