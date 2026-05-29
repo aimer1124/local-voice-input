@@ -8,6 +8,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ## [Unreleased]
 
+### Added
+- **`install.sh` 开关 (#9)** — 新增 `--dry-run`（只读环境检查 + 打印将执行动作，不下载/
+  不写文件）、`--skip-models`（跳过 Whisper ~550MB + Ollama ~2GB 下载，离线机用）、
+  `--upgrade-only`（只刷新运行时脚本和 HUD，跳过依赖与模型，二次安装/升级用）、
+  `--help`。可组合。新增 `run()` 包装让 dry-run 下所有写操作只打印意图；修复 `mkdir
+  -p ~/.whisper_models` 原先只在「下载模型」步执行、`--skip-models` 下会缺失的问题
+  （移到必定执行的 HUD 部署步）。
+
 ### Fixed
 - **辅助功能静默粘贴失败 (#8)** — 没授「辅助功能」权限时，自动 ⌘V 会被 macOS 拒
   （keystroke 返回 `-1719`），以前文本只进了剪贴板没贴出去、HUD 却显示「✓ 已完成」，
