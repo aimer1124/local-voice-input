@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ## [Unreleased]
 
+See [ROADMAP.md](./ROADMAP.md) and [open issues](https://github.com/aimer1124/local-voice-input/issues) for what's planned next.
+
+---
+
+## [1.6.0] — 2026-05-29
+
+UX & onboarding 一波修复。主线：把三处「失败了却看不懂为啥」的**静默失败**逐一变成
+一句话能修的可操作提示（#4 麦克风、#8 辅助功能），再给 `install.sh` 补上
+dry-run / skip-models / upgrade-only 三个开关（#9）。配套做了配置模板收敛与文档对齐。
+
 ### Added
 - **`install.sh` 开关 (#9)** — 新增 `--dry-run`（只读环境检查 + 打印将执行动作，不下载/
   不写文件）、`--skip-models`（跳过 Whisper ~550MB + Ollama ~2GB 下载，离线机用）、
@@ -38,8 +48,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
   内置默认值与旧模板逐字节一致，对新装零行为变化。
 - **文档一致性** — `SHORT_TEXT_THRESHOLD` 模板默认由 8 修正为 15（对齐代码默认与
   README）；README 修正 HUD 行数/体积（约 240 行 / ~116KB）。
-
-See [ROADMAP.md](./ROADMAP.md) and [open issues](https://github.com/aimer1124/local-voice-input/issues) for what's planned next.
 
 ---
 
