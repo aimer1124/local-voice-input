@@ -152,7 +152,7 @@
 
 #### 5. 屏幕中央 HUD
 
-- Swift 编写，约 90 行，编译成 92KB 单文件二进制
+- Swift 编写，约 240 行，编译成 ~116KB 单文件二进制
 - 使用 `NSVisualEffectView` + `.hudWindow` 材质，效果跟系统音量调节弹窗一致
 - 通过 `/tmp/vinput_hud.pid` 维护单例：新 HUD 启动时杀掉旧的
 - 鼠标穿透、跨 Space 显示、自适应文字宽度
@@ -243,29 +243,29 @@ cd local-voice-input
 
 ## ⚙️ 配置
 
-所有参数集中在 `~/.config/vinput.conf`：
+配置集中在 `~/.config/vinput.conf`。**设计原则是开箱即用** —— 默认模板只放「大多数人真正会改」的几项，全部带推荐默认值；删掉或留空任意一项都会回退到内置默认，不会报错：
 
 ```bash
 # === Whisper ASR ===
 MODEL_PATH="$HOME/.whisper_models/ggml-large-v3-turbo-q5_0.bin"
-WHISPER_LANG="zh"
-WHISPER_THREADS=8
+WHISPER_LANG="zh"              # 中英混读靠热词 prompt 引导
 
 # === Ollama LLM 润色 ===
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
-SHORT_TEXT_THRESHOLD=15        # 短于此长度跳过 LLM
+SHORT_TEXT_THRESHOLD=15        # 短于此字数（中文 1 字=1）跳过 LLM，省 1–2 秒
 
-# === 后台版行为 ===
-AUTO_PASTE=1                   # 1=自动 ⌘V，0=只复制
-USE_VAD=0                      # 0=纯 toggle，1=静音自动停
-MAX_REC_SECONDS=30             # 硬超时
+# === 录音 / 粘贴行为 ===
+AUTO_PASTE=1                   # 1=自动 ⌘V（需辅助功能权限），0=只复制
+USE_VAD=0                      # 0=纯 toggle（推荐），1=静音自动停（仅安静环境）
+MAX_REC_SECONDS=30             # 录音硬超时（秒）
+SOX_GAIN_DB=-3                 # 小声/远离麦克风调大：+6~+12（负=衰减）
 
-# === VAD 阈值（仅 USE_VAD=1 时生效）===
-SILENCE_TAIL=1.5
-SILENCE_START_THRESHOLD="0.5%"
-SILENCE_STOP_THRESHOLD="6%"
+# === 热词词表（可选）===
+HOTWORDS_FILE="$HOME/.config/vinput_hotwords.txt"
 ```
+
+> 想调 Whisper 解码内参、SoX 滤波、动态 prompt、VAD 阈值等？见下方 [进阶配置](#-进阶配置)。这些默认值已针对中文 + 程序员场景调优，一般不用动。
 
 ### 热词词表
 
@@ -299,6 +299,69 @@ PostgreSQL
 ```bash
 HUD_Y_PERCENT=50 HUD_FONT_SIZE=36 ~/.whisper_models/hud "测试样式" 2
 ```
+
+---
+
+## 🧩 进阶配置
+
+下面这些**没有放进默认配置模板**，因为默认值已针对中文 + 程序员场景调优，绝大多数人不用动。
+需要时手动加进 `~/.config/vinput.conf` 即可（留空 = 用内置默认，不会报错）。改 Whisper/LLM
+相关项后请按 [回归测试](#-回归测试pre-tag-必跑) 跑一遍再用。
+
+### Whisper 解码内参
+
+```bash
+WHISPER_THREADS=8             # 推理线程数
+WHISPER_BEAM_SIZE=5           # beam search 路数，减少同音字误选；延迟 +0.5s
+WHISPER_TEMPERATURE_INC=0.2   # 温度递增步长，失败时温度采样兜底防吐空
+# WHISPER_TEMPERATURE=0       # 起始温度，留空=whisper.cpp 默认
+# WHISPER_NO_SPEECH_THOLD=0.6 # 越小越严。⚠️ v1.1.3 调严后普通麦全判"非语音"，v1.1.6 改回默认(留空)
+# WHISPER_LOGPROB_THOLD=-1.0  # 越接近 0 越严。同上，仅 doctor 显示信号偏弱时再考虑
+```
+
+### 动态 Prompt 上下文
+
+把最近 N 次成功转写拼到 Whisper `--prompt` 前，给模型「短期记忆」。实测连续聊同一话题时专有名词命中率 +20~40%。
+
+```bash
+USE_RECENT_PROMPT=1
+RECENT_PROMPT_COUNT=5
+RECENT_PROMPT_FILE="$HOME/.cache/vinput/recent.txt"
+RECENT_PROMPT_MAX_CHARS=280
+```
+
+### SoX 录音预处理
+
+> ⚠️ 所有效果必须 streaming-safe（不能依赖整流 buffer）。v1.1.4 用过 `norm -3`，导致 rec 在 SIGINT 时 0 帧输出 → "未识别到有效语音"。v1.1.7 改回固定 gain。
+
+```bash
+USE_SOX_PREPROCESS=1
+SOX_HIGHPASS=80     # 切低频：风扇 / 街道嗡嗡声
+SOX_LOWPASS=8000    # 切高频：嘶嘶声 / 抖动
+SOX_GAIN_DB=-3      # 固定增益（已在基础配置，此处列全）
+REC_WARMUP_MS=150   # rec 启动后等 buffer 就绪再提示说话，避免首字丢失
+```
+
+### VAD 阈值（仅 `USE_VAD=1` 时生效）
+
+```bash
+SILENCE_TAIL=1.5
+SILENCE_START_THRESHOLD="0.5%"
+SILENCE_STOP_THRESHOLD="6%"
+```
+
+### HUD 终态显示 & ↑ 重录
+
+```bash
+# HUD_SHOW_RESULT=1       # 粘贴后 HUD 显示真正粘贴的内容（截断 60 字）
+# HUD_FINAL_DURATION=2.5  # 终态停留秒数
+# HUD_RERUN_ON_UP=0       # 1=终态显示期间按 ↑ 立即重跑一次完整流水线（ESC 永远立即关闭）
+```
+
+> `HUD_RERUN_ON_UP=1` 需在**系统设置 → 隐私 → 输入监控**给 hud 二进制（路径见 `vinput --doctor`）打勾。
+> 没给权限时 HUD 仍正常显示，只是 ↑ 无效——这是个便利功能，默认关。
+
+HUD 外观（位置/字号/材质等 8 项）见上方 [HUD 样式调整](#hud-样式调整)。
 
 ---
 
