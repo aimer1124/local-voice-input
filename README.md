@@ -199,6 +199,14 @@ cd local-voice-input
 
 `install.sh` 走的是历史路径：自动检查 Homebrew → `brew install` 依赖 → `brew install --cask raycast` → 下载 Whisper 模型 → 编译 / 下载 HUD 二进制 → 复制脚本到 `~/.whisper_models/` → 预热 Ollama。和 `vinput setup` 等价，只是不依赖 brew tap。
 
+支持几个开关（可组合，`--help` 看全部）：
+
+```bash
+./install.sh --dry-run        # 只检查环境 + 打印将执行的动作，不下载/不写任何文件
+./install.sh --upgrade-only   # 只刷新脚本和 HUD，跳过依赖与模型（升级最快）
+./install.sh --skip-models    # 跳过 Whisper(~550MB)+Ollama(~2GB) 下载（离线机用 USB 拷模型）
+```
+
 ### 手动配置（自动化无法覆盖的部分）
 
 完成 `install.sh` 后，还需要在系统设置里：
