@@ -8,7 +8,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ## [Unreleased]
 
-See [ROADMAP.md](./ROADMAP.md) and [open milestones](https://github.com/aimer1124/local-voice-input/milestones) for what's planned next.
+### Fixed
+- **静默失败救援 (#4)** — 转写为空时不再一律弹「未识别到有效语音」。先测一次
+  录音 RMS 电平（复用 `vinput --doctor` 同款 sox stat，仅失败路径触发、成功路径
+  零开销），按电平给可操作诊断：死寂（≤0.002）→「🎤 麦克风几乎没声音 — 拔掉无麦
+  耳机，或检查 系统设置 → 声音 → 输入」；偏弱（<0.01）→「🔈 声音太小没听清 —
+  靠近麦克风，或调大 SOX_GAIN_DB」；信号正常仍空 → 保留原提示。
+  这把插着 3 极 TRS 耳机时最常见的「录不到声还看不懂为啥」从死胡同变成一句话能修。
+
+### Changed
+- **配置模板收敛** — `config/vinput.conf.example` 砍到 ~8 项基础旋钮，Whisper 解码
+  内参 / 动态 prompt / SoX / VAD / HUD 进阶项移到 README「进阶配置」。所有移除项的
+  内置默认值与旧模板逐字节一致，对新装零行为变化。
+- **文档一致性** — `SHORT_TEXT_THRESHOLD` 模板默认由 8 修正为 15（对齐代码默认与
+  README）；README 修正 HUD 行数/体积（约 240 行 / ~116KB）。
+
+See [ROADMAP.md](./ROADMAP.md) and [open issues](https://github.com/aimer1124/local-voice-input/issues) for what's planned next.
 
 ---
 
