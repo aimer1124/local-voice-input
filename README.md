@@ -209,6 +209,10 @@ cd local-voice-input
    - Add Script Directory：`~/.config/raycast-scripts`
    - 给 `🎙️ 语音输入` 绑定快捷键（推荐 `⌘⇧Space`）
 
+> 漏了第 2 步也不会卡死：辅助功能没授权时，转写结果会照常进剪贴板，vinput 会提示
+> 「📋 已复制到剪贴板 · 自动粘贴需勾选辅助功能」并**自动帮你打开对应设置面板**，授权
+> 后即恢复自动粘贴。授权前手动按 `⌘V` 即可。
+
 ### 系统要求
 
 - macOS 13+
@@ -417,6 +421,7 @@ vinput/
 | 症状 | 命令 / 操作 |
 |---|---|
 | Raycast 没反应 | 检查命令是否出现、快捷键有无冲突 |
+| 只复制了没自动粘贴 | 系统设置 → 隐私 → 辅助功能 勾选 Raycast（vinput 会自动提示并打开该面板） |
 | 录音失败 | `tail -50 /tmp/vinput_debug.log` |
 | 不确定哪里出问题 | `~/.whisper_models/vinput --doctor` |
 | 麦克风电平测试 | `rec -q /tmp/t.wav trim 0 3 && sox /tmp/t.wav -n stat \| grep RMS` |

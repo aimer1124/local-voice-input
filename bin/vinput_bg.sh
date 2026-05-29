@@ -273,6 +273,22 @@ audio_rms() {
 }
 
 # ──────────────────────────────────────────────────────────────
+# 首启权限引导 (#8) — 直接打开对应「系统设置 → 隐私」面板，但每个面板只主动开一次
+# （flag 落在 ~/.cache/vinput/.<key>），避免每次没授权都把设置窗怼到用户脸上。
+# 用法: open_settings_pane <flag-key> <x-apple.systempreferences URL>
+# 返回 0 = 这次开了，1 = 之前开过、跳过。
+# ──────────────────────────────────────────────────────────────
+open_settings_pane() {
+    local key="$1" url="$2"
+    local flag="$HOME/.cache/vinput/.${key}"
+    [ -f "$flag" ] && return 1
+    mkdir -p "$(dirname "$flag")" 2>/dev/null
+    open "$url" 2>/dev/null
+    : > "$flag" 2>/dev/null
+    return 0
+}
+
+# ──────────────────────────────────────────────────────────────
 # Test-only fast path (used by tests/asr/run.sh).
 # Skips lock/HUD/rec/pbcopy: feed a WAV, get the raw Whisper output (after
 # UTF-8 rescue, before LLM cleaning) on stdout. Exits non-zero on empty.
@@ -502,8 +518,18 @@ fi
 
 printf '%s' "$CLEANED_RESULT" | pbcopy
 
+# 自动粘贴 + 辅助功能权限检测 (#8)。
+# 没授「辅助功能」时 keystroke 会被拒并返回 -1719（errAEEventNotPermitted，
+# 错误码与系统语言无关）。以前这里静默失败：文本只进了剪贴板没贴出去，HUD 还显示
+# "✓ 已完成" —— 用户一脸懵。现在捕获这个错误，下面据此给可操作引导。
+AX_DENIED=0
 if [ "$AUTO_PASTE" = "1" ]; then
-    osascript -e 'tell application "System Events" to keystroke "v" using command down'
+    PASTE_ERR=$(osascript -e 'tell application "System Events" to keystroke "v" using command down' 2>&1)
+    if [ $? -ne 0 ]; then
+        case "$PASTE_ERR" in
+            *-1719*|*assistive*) AX_DENIED=1 ;;
+        esac
+    fi
 fi
 
 # 写入最近转写缓冲（v1.1.4 #17）— 下次启动时拼为 Whisper prompt 上下文。
@@ -520,6 +546,15 @@ fi
 
 # 历史日志（#19）— 不影响主流程，失败也不报错
 append_history "$RAW_PRE_CORRECTIONS" "$RAW_RESULT" "$CLEANED_RESULT" "$MODE" "$AUDIO_PATH" 2>/dev/null || true
+
+# 辅助功能权限缺失 (#8)：文本已在剪贴板，只是没能自动 ⌘V。给可操作引导而不是假装成功，
+# 并在第一次遇到时顺手打开「隐私 → 辅助功能」面板（之后不再打扰）。
+if [ "$AX_DENIED" = "1" ]; then
+    open_settings_pane accessibility \
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    hud "📋 已复制到剪贴板 · 自动粘贴需在「设置 → 隐私 → 辅助功能」勾选 Raycast，先按 ⌘V 用着" 6
+    exit 0
+fi
 
 # HUD 最终态（#23）— 显示真正粘贴的内容（截断 60 字），给用户视觉确认
 HUD_SHOW_RESULT="${HUD_SHOW_RESULT:-1}"
