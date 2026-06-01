@@ -391,6 +391,12 @@ HUD 外观（位置/字号/材质等 8 项）见上方 [HUD 样式调整](#hud-�
 
 ## 🗂️ 项目结构
 
+这套项目有三层，不要把安装后的运行目录当成源码仓库：
+
+- **主源码仓库**：`local-voice-input`（本文档所在仓库），维护脚本、HUD 源码、Raycast 模板、配置模板、测试与 release notes。
+- **Homebrew tap 仓库**：`homebrew-tap`，只维护 `Formula/local-voice-input.rb`，指向某个 GitHub tag tarball 和 release 里的 `hud` 二进制。
+- **本机运行目录**：`~/.whisper_models`，只放 Whisper 模型和运行入口软链。`vinput setup` 会把 `vinput` / `vinput_bg.sh` / `hud` 链接到这里；不要在这里维护源码副本。
+
 ```
 vinput/
 ├── README.md                          # English version（默认）
@@ -399,17 +405,43 @@ vinput/
 ├── install.sh                         # 一键安装
 ├── uninstall.sh                       # 卸载
 ├── bin/
+│   ├── vinput                         # CLI：setup / doctor / history / corrections
 │   ├── vinput.sh                      # 前台手动版（终端 Ctrl+C）
 │   └── vinput_bg.sh                   # 后台版（Raycast 调用）
 ├── raycast/
-│   └── voice-input.sh                 # Raycast 命令封装
+│   ├── voice-input.sh                 # 完整流水线
+│   ├── voice-input-raw.sh             # 跳过 LLM
+│   └── voice-input-en.sh              # 中文口述 → 英文 prompt
 ├── src/
 │   └── hud.swift                      # 屏幕中央 HUD 源码
 ├── config/
 │   ├── vinput.conf.example            # 配置模板
-│   └── vinput_hotwords.example.txt    # 热词模板
+│   ├── vinput_hotwords.example.txt    # 热词模板
+│   └── vinput_corrections.example.tsv # 纠错表模板
+├── tests/
+│   ├── integration/                   # 无麦克风/无网络 CLI 集成测试
+│   ├── llm/                           # Ollama prompt 清理回归
+│   └── asr/                           # Whisper 音频样本回归
+├── scripts/
+│   ├── lint-shell.sh                  # shell 兼容性 lint
+│   ├── preflight.sh                   # 发布前确定性检查
+│   └── release.sh                     # release/tap 协调脚本
 └── assets/                            # 截图/演示资源
 ```
+
+发布前建议先跑：
+
+```bash
+bash scripts/preflight.sh
+```
+
+需要同时跑本地 LLM/ASR 回归时：
+
+```bash
+RUN_LLM=1 RUN_ASR=1 bash scripts/preflight.sh
+```
+
+更新 Homebrew tap 时用 `scripts/release.sh --version X.Y.Z` 做版本和流程检查，再用 `--apply --source-sha ... --hud-sha ...` 写入 tap formula。
 
 ---
 
@@ -436,7 +468,14 @@ vinput/
 ```bash
 ~/.whisper_models/vinput --doctor
 ```
-会自动检查工具链、资源文件、Ollama 状态、HUD 可用性，并跑一次 3 秒麦克风录音测试，按"健康/偏弱/几乎静音"输出 RMS 值。
+会自动检查有效配置、运行目录、Raycast 命令入口、工具链、资源文件、Ollama 状态、HUD 可用性，并跑一次 3 秒麦克风录音测试，按"健康/偏弱/几乎静音"输出 RMS 值。
+
+只想看配置/入口结构、不碰 Ollama 和麦克风：
+
+```bash
+~/.whisper_models/vinput --doctor --quick
+~/.whisper_models/vinput config
+```
 
 | 症状 | 命令 / 操作 |
 |---|---|

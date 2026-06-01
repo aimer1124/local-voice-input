@@ -1,6 +1,14 @@
 # Release Notes Template — Bilingual (zh-CN + English)
 
-> 复制此模板填写每次新版本的 release notes，然后运行：
+> 复制此模板填写每次新版本的 release notes。发布前先跑确定性检查：
+>
+> ```bash
+> bash scripts/preflight.sh
+> # optional full local gate:
+> RUN_LLM=1 RUN_ASR=1 bash scripts/preflight.sh
+> ```
+>
+> 然后运行：
 >
 > ```bash
 > gh release create vX.Y.Z --title "vX.Y.Z — short title" \
@@ -8,6 +16,13 @@
 >
 > # 推 tag 触发 CI 自动上传 hud 二进制（不会覆盖你的 notes）
 > git fetch --tags
+> ```
+>
+> 更新 Homebrew tap 时，用 release helper 校验版本并写入 formula：
+>
+> ```bash
+> scripts/release.sh --version X.Y.Z --tap ~/homebrew-tap \
+>     --source-sha <tag-tarball-sha256> --hud-sha <hud-sha256> --apply
 > ```
 >
 > 或本地先打 tag 再推送：

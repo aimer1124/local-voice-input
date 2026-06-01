@@ -15,18 +15,19 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Files to check: bin/*, scripts/*.sh, raycast/*.sh, install.sh, top-level *.sh.
-# Skip vendored/built artifacts.
-mapfile -t FILES < <(
-    {
-        find "$ROOT/bin"     -type f 2>/dev/null
-        find "$ROOT/scripts" -type f -name "*.sh" 2>/dev/null
-        find "$ROOT/raycast" -type f -name "*.sh" 2>/dev/null
-        find "$ROOT/tests"   -type f -name "*.sh" 2>/dev/null
-        ls    "$ROOT/install.sh" 2>/dev/null
-    } | sort -u
-)
+# Skip vendored/built artifacts. Keep this Bash 3.2-compatible for macOS.
+FILES_TMP="$(mktemp -t vinput-lint-files.XXXXXX)"
+trap 'rm -f "$FILES_TMP"' EXIT
+{
+    find "$ROOT/bin"     -type f 2>/dev/null
+    find "$ROOT/scripts" -type f -name "*.sh" 2>/dev/null
+    find "$ROOT/raycast" -type f -name "*.sh" 2>/dev/null
+    find "$ROOT/tests"   -type f -name "*.sh" 2>/dev/null
+    ls    "$ROOT/install.sh" 2>/dev/null
+} | sort -u > "$FILES_TMP"
 
-if [ ${#FILES[@]} -eq 0 ]; then
+FILE_COUNT=$(wc -l < "$FILES_TMP" | tr -d ' ')
+if [ "$FILE_COUNT" -eq 0 ]; then
     echo "lint-shell: no shell files found"
     exit 0
 fi
@@ -36,13 +37,13 @@ fi
 # - Lines containing the `lint-shell:disable` pragma are skipped (used in
 #   this script itself and any other place that legitimately documents the
 #   anti-pattern in prose / strings rather than executing it).
-HITS=$(perl -ne '
+HITS=$(xargs perl -ne '
     next if /lint-shell:disable/;
     if (/\$[A-Za-z_][A-Za-z0-9_]*[\x80-\xff]/) {
         print "$ARGV:$.: $_";
     }
     close(ARGV) if eof;
-' "${FILES[@]}" 2>/dev/null)
+' < "$FILES_TMP" 2>/dev/null)
 
 if [ -n "$HITS" ]; then
     echo "✗ lint-shell: found \$VAR<non-ASCII> — wrap in braces (\${VAR}<...>) to survive set -u"
@@ -54,4 +55,4 @@ if [ -n "$HITS" ]; then
     exit 1
 fi
 
-echo "✓ lint-shell: ${#FILES[@]} files clean"
+echo "✓ lint-shell: $FILE_COUNT files clean"
