@@ -337,7 +337,7 @@ cmd_setup() {
     local raycast_dir="$HOME/.config/raycast-scripts"
     mkdir -p "$raycast_dir"
     local installed=0
-    for rs in voice-input.sh voice-input-raw.sh; do
+    for rs in voice-input.sh voice-input-raw.sh voice-input-en.sh; do
         local raycast_src="$root/raycast/$rs"
         local raycast_dst="$raycast_dir/$rs"
         if [ -f "$raycast_src" ]; then

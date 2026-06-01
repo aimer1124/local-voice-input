@@ -8,6 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ## [Unreleased]
 
+### Added
+- **EN mode — a third Raycast command (`🌐 语音输入 (EN)`)** — speak Chinese, get an English
+  prompt. Shares `vinput_bg.sh` with the default and Raw commands; `VINPUT_TRANSLATE_EN=1` swaps the
+  LLM step for a "Chinese speech → English written instruction" translate-and-reshape pass (new
+  `clean_with_llm_en`, leaving the Chinese `clean_with_llm` untouched). ASR still transcribes with
+  `-l zh`. **Always** runs the LLM (ignores `SHORT_TEXT_THRESHOLD`), otherwise a short Chinese phrase
+  would come back unchanged in Chinese. Suggested hotkey `⌃⇧Space`. Deployed by both `install.sh` and
+  `vinput setup`; adds a `--test-llm-clean-en` test hook.
+
 See [ROADMAP.md](./ROADMAP.md) and [open issues](https://github.com/aimer1124/local-voice-input/issues) for what's planned next.
 
 ---

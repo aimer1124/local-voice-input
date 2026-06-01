@@ -215,7 +215,7 @@ After `install.sh` finishes, you still need to do the following in System Settin
 2. **Privacy → Accessibility**: enable Raycast (used for the automatic ⌘V paste)
 3. **Raycast Settings → Extensions → Script Commands**
    - Add Script Directory: `~/.config/raycast-scripts`
-   - Bind a hotkey to the **🎙️ 语音输入** ("Voice Input") command (recommended: `⌘⇧Space`)
+   - Bind a hotkey to the **🎙️ 语音输入** ("Voice Input") command (recommended: `⌘⇧Space`). The Raw and EN commands are optional — see [Modes](#modes-three-raycast-commands) below.
 
 > Skipping step 2 won't break things: without Accessibility permission the transcription still lands on
 > the clipboard, and vinput shows "📋 Copied to clipboard · auto-paste needs Accessibility" while
@@ -241,6 +241,18 @@ After `install.sh` finishes, you still need to do the following in System Settin
 3. Speak after the Pop sound
 4. Press the hotkey once more when done
 5. Wait 2–4s; the text is auto-pasted at the cursor
+
+### Modes (three Raycast commands)
+
+vinput ships three Raycast script commands that share the same pipeline (`vinput_bg.sh`) and differ only in the LLM step. Bind each to its own hotkey:
+
+| Command | Hotkey (suggested) | LLM step | Output |
+|---|---|---|---|
+| **🎙️ 语音输入** (default) | `⌘⇧Space` | distill Chinese speech into a written Chinese prompt | Chinese (mixed CN/EN) |
+| **📝 语音输入 (Raw)** | `⌥Space` | skipped | raw Whisper transcript, as spoken |
+| **🌐 语音输入 (EN)** | `⌃⇧Space` | translate + reshape Chinese speech into an English prompt | English |
+
+> EN mode still transcribes your Chinese speech with `-l zh`, then translates and tightens it into a concise English instruction in the LLM step. It **always** runs the LLM (ignores `SHORT_TEXT_THRESHOLD`) — otherwise a short Chinese phrase would come back unchanged in Chinese.
 
 ### Performance budget (10s of audio)
 

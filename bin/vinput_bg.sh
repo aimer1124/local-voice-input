@@ -242,6 +242,67 @@ clean_with_llm() {
     fi
 }
 
+# ──────────────────────────────────────────────────────────────
+# 中→英翻译整形（EN 模式，VINPUT_TRANSLATE_EN=1）— 与 clean_with_llm 对称：
+# 把中文口语碎碎念翻译并整形成简洁、准确的「英文」书面指令（不只是直译，去口水 + 收紧）。
+# 用于「说中文、要英文 prompt」的场景。失败/空响应时返回原文（永不丢用户输入）。
+#
+# 与 clean_with_llm 一样有测试钩子 --test-llm-clean-en；改这里之前先跑 bash tests/llm/run.sh。
+# ──────────────────────────────────────────────────────────────
+clean_with_llm_en() {
+    local raw="$1"
+    local llm_prompt payload response_json cleaned
+
+    llm_prompt="你是一个「中文口语 → 英文书面指令」的提炼翻译器。把下面用户的中文口语碎碎念翻译并清理成简洁、准确的【英文】书面指令。
+
+【硬规则】
+1. 输出必须是英文。删除语气词和无意义重复（嗯、那个、就是、我想说的是…）。
+2. 若说话人中途自我纠正（\"啊不对，应该是…\"），只保留最终意图，丢弃被纠正的部分。
+3. **保留数字、否定词、专有名词/代码标识符**：'5个按钮' → '5 buttons'；'不要硬编码' → 'do not hardcode'（否定不能丢）；'src/lib'、'UserList'、'qwen2.5' 等标识符原样保留、不翻译。
+4. **绝对不要生成代码块**：用户说\"写一个组件\"——你输出 \"Write a React component UserList that renders an array from props\"，**不是** \`\`\`function UserList() {...}\`\`\`。
+5. 保留列表结构（'第一…第二…第三…' → '1. … 2. … 3. …'）。
+6. 严禁输出任何解释、寒暄、'Here is…' 之类的引导语。**只输出最终英文文本本身**。
+
+【示例】
+输入: 嗯，那个，我想说的是，帮我改一下这个函数，让它返回数组
+输出: Change this function to return an array
+
+输入: 把它先放到 utils 目录下，啊不对，应该是放到 src/lib 目录下
+输出: Put it under src/lib
+
+输入: 帮我写一个 React 组件叫 UserList，从 props 接收数组并渲染列表
+输出: Write a React component called UserList that takes an array from props and renders a list
+
+输入: 把页面上的 5 个按钮去掉吧
+输出: Remove the 5 buttons on the page
+
+输入: 记得不要把数据库密码硬编码到代码里
+输出: Do not hardcode the database password in the code
+
+【现在轮到你】
+输入: ${raw}
+输出:"
+
+    payload=$(jq -n \
+        --arg model "$OLLAMA_MODEL" \
+        --arg prompt "$llm_prompt" \
+        --arg keep_alive "30m" \
+        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive}')
+
+    response_json=$(curl -s -X POST "$OLLAMA_URL/api/generate" \
+        -H "Content-Type: application/json" \
+        -d "$payload")
+
+    cleaned=$(echo "$response_json" | jq -r '.response // empty' \
+              | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+
+    if [ -z "$cleaned" ]; then
+        printf '%s' "$raw"
+    else
+        printf '%s' "$cleaned"
+    fi
+}
+
 hud() {
     local msg="$1"
     local dur="${2:-2.0}"
@@ -299,6 +360,13 @@ open_settings_pane() {
 if [ "${1:-}" = "--test-llm-clean" ] && [ -n "${2:-}" ]; then
     # tests/llm/run.sh 用：直接喂文本，返回 LLM 整形后的输出。
     clean_with_llm "$2"
+    echo
+    exit 0
+fi
+
+if [ "${1:-}" = "--test-llm-clean-en" ] && [ -n "${2:-}" ]; then
+    # EN 模式测试钩子：直接喂中文文本，返回翻译整形后的英文输出。
+    clean_with_llm_en "$2"
     echo
     exit 0
 fi
@@ -504,7 +572,13 @@ RAW_RESULT=$(apply_corrections "$RAW_RESULT")
 # 短文本阈值（v1.1.3）：用 wc -m 数字符数（中文 1 字 = 1），不再用字节数。
 # 默认 8 字 ≈ 中文短指令的下限（"删除多余文件" 6 字仍走 LLM，"取消" 2 字跳过）。
 RAW_CHARS=$(printf %s "$RAW_RESULT" | wc -m | tr -d ' ')
-if [ "${VINPUT_RAW:-0}" = "1" ]; then
+if [ "${VINPUT_TRANSLATE_EN:-0}" = "1" ]; then
+    # EN 模式：说中文、要英文 prompt。必过 LLM 翻译整形 —— 忽略短文本跳过，
+    # 否则 "取消" 这类短中文会原样输出中文，达不到翻英目的。优先级高于 raw / short。
+    MODE="en"
+    hud "🌐 翻译成英文中..." 30
+    CLEANED_RESULT=$(clean_with_llm_en "$RAW_RESULT")
+elif [ "${VINPUT_RAW:-0}" = "1" ]; then
     MODE="raw"
     CLEANED_RESULT="$RAW_RESULT"
 elif [ "$RAW_CHARS" -lt "$SHORT_TEXT_THRESHOLD" ]; then

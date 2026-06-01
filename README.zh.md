@@ -215,7 +215,7 @@ cd local-voice-input
 2. **隐私 → 辅助功能**：勾选 Raycast（用于自动 ⌘V 粘贴）
 3. **Raycast 设置 → Extensions → Script Commands**
    - Add Script Directory：`~/.config/raycast-scripts`
-   - 给 `🎙️ 语音输入` 绑定快捷键（推荐 `⌘⇧Space`）
+   - 给 `🎙️ 语音输入` 绑定快捷键（推荐 `⌘⇧Space`）。Raw 和 EN 命令可选，见下方 [模式](#模式三个-raycast-命令)。
 
 > 漏了第 2 步也不会卡死：辅助功能没授权时，转写结果会照常进剪贴板，vinput 会提示
 > 「📋 已复制到剪贴板 · 自动粘贴需勾选辅助功能」并**自动帮你打开对应设置面板**，授权
@@ -240,6 +240,18 @@ cd local-voice-input
 3. 听到 Pop 音后说话
 4. 说完再按一次快捷键
 5. 等 2–4 秒，文字自动粘贴到光标位置
+
+### 模式（三个 Raycast 命令）
+
+vinput 提供三个 Raycast 命令，共用同一条流水线（`vinput_bg.sh`），只在 LLM 那步不同。各绑一个快捷键即可：
+
+| 命令 | 快捷键（建议） | LLM 步骤 | 输出 |
+|---|---|---|---|
+| **🎙️ 语音输入**（默认） | `⌘⇧Space` | 把中文口语提炼成中文书面 prompt | 中文（夹英文） |
+| **📝 语音输入 (Raw)** | `⌥Space` | 跳过 | Whisper 转写原文，保留口语原貌 |
+| **🌐 语音输入 (EN)** | `⌃⇧Space` | 把中文口语翻译+整形成英文 prompt | 英文 |
+
+> EN 模式仍按 `-l zh` 转写你说的中文，再在 LLM 那步翻译并收紧成简洁的英文指令。它**总是**走 LLM（忽略 `SHORT_TEXT_THRESHOLD`）——否则短中文短语会原样返回中文。
 
 ### 性能预算（10 秒中文音频）
 
