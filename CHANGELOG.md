@@ -14,40 +14,46 @@ See [ROADMAP.md](./ROADMAP.md) and [open issues](https://github.com/aimer1124/lo
 
 ## [1.6.0] — 2026-05-29
 
-UX & onboarding 一波修复。主线：把三处「失败了却看不懂为啥」的**静默失败**逐一变成
-一句话能修的可操作提示（#4 麦克风、#8 辅助功能），再给 `install.sh` 补上
-dry-run / skip-models / upgrade-only 三个开关（#9）。配套做了配置模板收敛与文档对齐。
+A round of UX & onboarding fixes. The throughline: turn three "it failed but you can't tell why"
+**silent failures** into one-line-fixable, actionable hints (#4 mic, #8 accessibility), and add
+`dry-run` / `skip-models` / `upgrade-only` flags to `install.sh` (#9). Plus config-template slimming
+and doc alignment.
 
 ### Added
-- **`install.sh` 开关 (#9)** — 新增 `--dry-run`（只读环境检查 + 打印将执行动作，不下载/
-  不写文件）、`--skip-models`（跳过 Whisper ~550MB + Ollama ~2GB 下载，离线机用）、
-  `--upgrade-only`（只刷新运行时脚本和 HUD，跳过依赖与模型，二次安装/升级用）、
-  `--help`。可组合。新增 `run()` 包装让 dry-run 下所有写操作只打印意图；修复 `mkdir
-  -p ~/.whisper_models` 原先只在「下载模型」步执行、`--skip-models` 下会缺失的问题
-  （移到必定执行的 HUD 部署步）。
+- **`install.sh` flags (#9)** — added `--dry-run` (read-only env check + print planned actions,
+  download/write nothing), `--skip-models` (skip the Whisper ~550MB + Ollama ~2GB downloads, for
+  offline machines), `--upgrade-only` (refresh only the runtime scripts and HUD, skip deps and
+  models, for re-install/upgrade), and `--help`. Combinable. Added a `run()` wrapper so every write
+  op only prints its intent under dry-run; fixed `mkdir -p ~/.whisper_models` previously running only
+  in the "download models" step and going missing under `--skip-models` (moved it to the always-run
+  HUD deploy step).
 
 ### Fixed
-- **辅助功能静默粘贴失败 (#8)** — 没授「辅助功能」权限时，自动 ⌘V 会被 macOS 拒
-  （keystroke 返回 `-1719`），以前文本只进了剪贴板没贴出去、HUD 却显示「✓ 已完成」，
-  用户一脸懵。现在捕获该错误，改成可操作引导：「📋 已复制到剪贴板 · 自动粘贴需在
-  设置 → 隐私 → 辅助功能 勾选 Raycast，先按 ⌘V 用着」，并在**首次**遇到时自动打开
-  对应设置面板（之后不再打扰）。
-  注：issue #8 想要的另两项检测——麦克风权限（macOS 首次录音自动弹窗）和默认输入
-  是否真实麦克风（`vinput --doctor` 的设备检测 + #4 的 RMS 救援）——已分别覆盖，本次
-  补齐最后的辅助功能缺口。
-- **静默失败救援 (#4)** — 转写为空时不再一律弹「未识别到有效语音」。先测一次
-  录音 RMS 电平（复用 `vinput --doctor` 同款 sox stat，仅失败路径触发、成功路径
-  零开销），按电平给可操作诊断：死寂（≤0.002）→「🎤 麦克风几乎没声音 — 拔掉无麦
-  耳机，或检查 系统设置 → 声音 → 输入」；偏弱（<0.01）→「🔈 声音太小没听清 —
-  靠近麦克风，或调大 SOX_GAIN_DB」；信号正常仍空 → 保留原提示。
-  这把插着 3 极 TRS 耳机时最常见的「录不到声还看不懂为啥」从死胡同变成一句话能修。
+- **Accessibility silent paste failure (#8)** — without Accessibility permission the auto ⌘V is
+  rejected by macOS (keystroke returns `-1719`); previously the text only reached the clipboard
+  without being pasted while the HUD still showed `✓ 已完成`, leaving users baffled. We now catch
+  that error and turn it into an actionable guide — `📋 已复制到剪贴板 · 自动粘贴需在 设置 → 隐私
+  → 辅助功能 勾选 Raycast，先按 ⌘V 用着` — and on the **first** occurrence auto-open the relevant
+  Settings panel (no nagging afterward). Note: the other two checks issue #8 wanted — mic permission
+  (macOS auto-prompts on first recording) and whether the default input is a real mic
+  (`vinput --doctor` device check + #4's RMS rescue) — are already covered separately; this closes
+  the last accessibility gap.
+- **Silent-failure rescue (#4)** — an empty transcription no longer always pops
+  `未识别到有效语音`. It first measures the recording's RMS level (reusing the same
+  `vinput --doctor` sox stat, triggered only on the failure path, zero overhead on success) and
+  gives an actionable diagnosis by level: dead silence (≤0.002) → `🎤 麦克风几乎没声音 — 拔掉无麦
+  耳机，或检查 系统设置 → 声音 → 输入`; weak (<0.01) → `🔈 声音太小没听清 — 靠近麦克风，或调大
+  SOX_GAIN_DB`; normal signal yet still empty → keeps the original message. This turns the most
+  common "plugged-in 3-pole TRS headphones, no audio captured and no idea why" dead-end into a
+  one-line fix.
 
 ### Changed
-- **配置模板收敛** — `config/vinput.conf.example` 砍到 ~8 项基础旋钮，Whisper 解码
-  内参 / 动态 prompt / SoX / VAD / HUD 进阶项移到 README「进阶配置」。所有移除项的
-  内置默认值与旧模板逐字节一致，对新装零行为变化。
-- **文档一致性** — `SHORT_TEXT_THRESHOLD` 模板默认由 8 修正为 15（对齐代码默认与
-  README）；README 修正 HUD 行数/体积（约 240 行 / ~116KB）。
+- **Config template slimming** — `config/vinput.conf.example` trimmed to ~8 basic knobs; the Whisper
+  decoding internals / dynamic prompt / SoX / VAD / HUD advanced items moved to the README "Advanced
+  Configuration". Every removed item's built-in default is byte-for-byte identical to the old
+  template, so fresh installs see zero behavior change.
+- **Doc consistency** — the `SHORT_TEXT_THRESHOLD` template default corrected from 8 to 15 (aligning
+  the code default with the README); README's HUD line-count/size corrected (~240 lines / ~116KB).
 
 ---
 

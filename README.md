@@ -1,79 +1,79 @@
-# 🎙️ local-voice-input — 本地 AI 语音 Prompt 输入器
+# 🎙️ local-voice-input — Local AI Voice Prompt Input
 
 [![CI](https://github.com/aimer1124/local-voice-input/actions/workflows/release.yml/badge.svg)](https://github.com/aimer1124/local-voice-input/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/aimer1124/local-voice-input?color=brightgreen)](https://github.com/aimer1124/local-voice-input/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Apple%20Silicon-lightgrey)](#-系统要求)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B%20%7C%20Apple%20Silicon-lightgrey)](#requirements)
 [![Roadmap](https://img.shields.io/badge/roadmap-v1.1%20%E2%86%92%20v2.0-blue)](./ROADMAP.md)
 
-> **完全离线** 的程序员专用语音输入工具：按下快捷键说话 → Whisper 转写 → 本地 LLM 提炼意图 → 自动粘贴到光标位置。
+> A **fully offline** voice-input tool built for programmers: press a hotkey and speak → Whisper transcribes → a local LLM distills your intent → the result is auto-pasted at your cursor.
 >
-> _命令行工具名: `vinput`_
+> _CLI tool name: `vinput`_
 
-**100% 本地运行，音频不出网，无云端依赖，无账号注册。**
+**100% local. Audio never leaves your machine. No cloud, no accounts.**
 
-[English README](./README.en.md) · [CHANGELOG](./CHANGELOG.md) · [ROADMAP](./ROADMAP.md) · [Contributing](./CONTRIBUTING.md)
+[中文 README](./README.zh.md) · [CHANGELOG](./CHANGELOG.md) · [ROADMAP](./ROADMAP.md) · [Contributing](./CONTRIBUTING.md)
 
 ![demo](./assets/demo.gif)
 
 ---
 
-## ✨ 核心特性
+## ✨ Features
 
-- 🔒 **完全离线**：Whisper.cpp + Ollama，音频与文本永不上云
-- 🧠 **AI 意图重构**：本地 LLM 过滤"呃、那个"等口水词，把碎碎念压成结构化 Prompt
-- ⚡ **响应快速**：10 秒中文音频，2–4 秒出文字
-- 🎛️ **双模 toggle**：按一下开始 / 再按一下停止，符合直觉
-- 🖥️ **多屏感知 HUD**：屏幕中下方毛玻璃悬浮提示，自动跟随鼠标所在屏
-- 🎯 **专业术语友好**：可自定义热词词表，编程英文混读不翻车
-- 🔌 **零配置可用**：默认中文，开箱即用；同时所有参数均可外置配置
+- 🔒 **Fully offline**: Whisper.cpp + Ollama — audio and text never touch the cloud
+- 🧠 **AI intent refinement**: a local LLM strips fillers ("uh", "you know") and compresses rambling into a structured prompt
+- ⚡ **Fast**: 10s of audio → text in 2–4s
+- 🎛️ **Toggle hotkey**: press once to start, press again to stop — intuitive
+- 🖥️ **Multi-monitor HUD**: a frosted-glass overlay near the bottom-center that follows whichever screen your cursor is on
+- 🎯 **Technical-term friendly**: a customizable hotword list keeps mixed code/English from derailing recognition
+- 🔌 **Zero-config**: Chinese by default, works out of the box; every parameter is also externally configurable
 
 ---
 
-## 🎬 工作流程
+## 🎬 Flow
 
 ```
-按 ⌘⇧Space (Raycast 快捷键)
+Press ⌘⇧Space (Raycast hotkey)
        │
        ▼
 ┌────────────────────────────┐
-│  🎙️ 录音中... (HUD 提示)   │  ← Pop 提示音
+│  🎙️ Recording... (HUD)     │  ← Pop sound
 └────────────────────────────┘
        │
-       │  说出你的指令，例如：
-       │  "帮我写一个 Python 函数，读取 CSV 然后过滤掉空行"
+       │  Speak your command, e.g.:
+       │  "write me a Python function that reads a CSV and filters out empty rows"
        │
        ▼
-再按 ⌘⇧Space               ← Tink 提示音
+Press ⌘⇧Space again          ← Tink sound
        │
        ▼
 ┌────────────────────────────┐
-│  💭 转写中...               │
+│  💭 Transcribing...         │
 └────────────────────────────┘
-       │  ↓ Whisper.cpp 转写
+       │  ↓ Whisper.cpp transcribes
 ┌────────────────────────────┐
-│  🤖 AI 润色中...            │
+│  🤖 Polishing with AI...    │
 └────────────────────────────┘
-       │  ↓ Ollama (qwen2.5:3b) 提炼意图
+       │  ↓ Ollama (qwen2.5:3b) distills intent
        │  ↓ pbcopy + osascript ⌘V
        ▼
 ┌────────────────────────────┐
-│  ✓ 已完成                   │
+│  ✓ Done                     │
 └────────────────────────────┘
        │
        ▼
-   光标位置自动出现整理过的 Prompt
+   The cleaned-up prompt appears at your cursor
 ```
 
 ---
 
-## 🧠 整体机制
+## 🧠 How It Works
 
-### 系统架构
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                       Raycast 全局快捷键                     │
+│                     Raycast global hotkey                    │
 └────────────────────────────┬────────────────────────────────┘
                              │
                              ▼
@@ -84,83 +84,83 @@
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  vinput_bg.sh (主逻辑)                                       │
+│  vinput_bg.sh (main logic)                                  │
 │                                                              │
-│   并发锁 (mkdir 原子性)                                       │
-│      ├─ 首次按键 → record 模式                                │
-│      └─ 二次按键 → toggle 模式（SIGINT 通知 rec 优雅退出）    │
+│   Concurrency lock (atomic mkdir)                            │
+│      ├─ First press  → record mode                           │
+│      └─ Second press → toggle mode (SIGINT for graceful rec) │
 │                                                              │
 │   ┌───────┐    ┌──────────┐    ┌────────┐    ┌──────────┐  │
 │   │ SoX   │ →  │ Whisper  │ →  │ Ollama │ →  │ pbcopy + │  │
 │   │ rec   │    │ -cli     │    │ qwen   │    │ ⌘V       │  │
 │   └───┬───┘    └──────────┘    └────────┘    └──────────┘  │
 │       │                                                      │
-│       │       30s 守护进程 (硬超时保底)                       │
+│       │       30s guard process (hard-timeout safety net)    │
 │       │                                                      │
 │   ┌───▼───┐                                                  │
-│   │  HUD  │ ← 每个阶段切换屏幕中央提示                       │
+│   │  HUD  │ ← switches the screen-center overlay per stage  │
 │   └───────┘                                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 关键机制详解
+### Key Mechanisms
 
-#### 1. 双模 toggle 锁机制
+#### 1. Dual-mode toggle lock
 
-`/tmp/vinput.lock.d` 同时充当 **互斥锁 + 状态机**：
+`/tmp/vinput.lock.d` doubles as a **mutex + state machine**:
 
-| 状态 | mkdir 结果 | PID 文件 | 行为 |
+| State | mkdir result | PID file | Behavior |
 |---|---|---|---|
-| 全新会话 | 成功 | 创建 | 进入 record 模式，开始录音 |
-| 录音中再按快捷键 | 失败 | 存在 | toggle 模式，发 SIGINT 让 rec 优雅停止 |
-| 转写阶段再按 | 失败 | 已删除 | 显示"正在处理上次录音" |
-| 残留锁（异常退出）| 失败 | PID 已死 | 自动清理后重新开始 |
+| Fresh session | succeeds | created | enter record mode, start recording |
+| Press again mid-recording | fails | exists | toggle mode, send SIGINT for a graceful rec stop |
+| Press again mid-transcription | fails | already removed | shows "still processing the previous recording" |
+| Stale lock (crash) | fails | PID is dead | auto-clean, then restart |
 
-`mkdir` 是原子的，比 `flock` 更可移植（macOS 不自带 `flock`）。
+`mkdir` is atomic and more portable than `flock` (macOS ships no `flock`).
 
-#### 2. 录音控制（USE_VAD 双模）
+#### 2. Recording control (USE_VAD dual mode)
 
-**默认 USE_VAD=0（推荐）**：
-- `rec` 按下立即开始录音，不管音量
-- 二次按键发 SIGINT 立即停
-- 30s 硬超时兜底，防忘按停
+**Default USE_VAD=0 (recommended)**:
+- `rec` starts capturing the instant you press, regardless of volume
+- A second press sends SIGINT for an immediate stop
+- 30s hard timeout as a safety net in case you forget to stop
 
-**可选 USE_VAD=1**：
-- 加 SoX silence 滤波：1.5s 静音自动停
-- 仅适合安静环境（环境噪音超过阈值会停不下来）
+**Optional USE_VAD=1**:
+- Adds a SoX silence filter: auto-stops after 1.5s of silence
+- Only suitable in quiet environments (ambient noise above the threshold keeps it from stopping)
 
-#### 3. Whisper 转写
+#### 3. Whisper transcription
 
-- 模型：`ggml-large-v3-turbo-q5_0`（547MB，Apple Silicon Metal 后端）
-- 通过 `--prompt` 注入热词词表，提升专业术语准确率
-- 强制 `-l zh` 中文模式，对中英混读靠 prompt 引导
+- Model: `ggml-large-v3-turbo-q5_0` (547MB, Apple Silicon Metal backend)
+- Hotword list injected via `--prompt` to boost technical-term accuracy
+- Forced `-l zh` (Chinese) mode; mixed Chinese/English is guided by the prompt
 
-#### 4. LLM 意图润色（短文本跳过优化）
+#### 4. LLM intent refinement (short-text skip optimization)
 
-- 短于 `SHORT_TEXT_THRESHOLD`（默认 15 字）→ 直接采用原文，省 1–2 秒
-- 长文本 → 调 Ollama，`keep_alive=30m` 让模型常驻显存
-- 失败时回退到原始 Whisper 结果
+- Shorter than `SHORT_TEXT_THRESHOLD` (15 chars by default) → use the raw text directly, saving 1–2s
+- Longer text → call Ollama with `keep_alive=30m` to keep the model resident in memory
+- Falls back to the raw Whisper result on failure
 
-**LLM Prompt 设计**：
+**LLM prompt design**:
 ```
-你是一个高效率的程序员指令提炼器。规则：
-1. 过滤语气词（呃、那个、啊）
-2. 中途自我纠正只保留最终意图
-3. 口语转化为书面硬核 Prompt 格式
-4. 严禁解释/寒暄，直接输出最终文本
+You are a high-efficiency programmer-instruction distiller. Rules:
+1. Filter out fillers ("uh", "um", "you know")
+2. On mid-sentence self-correction, keep only the final intent
+3. Turn speech into a written, hardcore prompt format
+4. No explanations or pleasantries — output the final text only
 ```
 
-#### 5. 屏幕中央 HUD
+#### 5. Screen-center HUD
 
-- Swift 编写，约 240 行，编译成 ~116KB 单文件二进制
-- 使用 `NSVisualEffectView` + `.hudWindow` 材质，效果跟系统音量调节弹窗一致
-- 通过 `/tmp/vinput_hud.pid` 维护单例：新 HUD 启动时杀掉旧的
-- 鼠标穿透、跨 Space 显示、自适应文字宽度
-- 多屏识别：用 `NSEvent.mouseLocation` 命中鼠标所在屏幕
+- ~240 lines of Swift, compiled into a single ~116KB binary
+- Uses `NSVisualEffectView` + the `.hudWindow` material, matching the system volume HUD
+- Maintains a singleton via `/tmp/vinput_hud.pid`: a new HUD kills the previous one
+- Mouse-passthrough, shows across Spaces, auto-fits text width
+- Multi-screen aware: uses `NSEvent.mouseLocation` to hit whichever screen the cursor is on
 
-#### 6. UTF-8 编码处理
+#### 6. UTF-8 encoding handling
 
-Raycast 启动的子进程不继承 Terminal 的 LANG，导致 `pbcopy` 把 UTF-8 中文字节当 Latin-1 处理，粘贴出乱码。脚本强制：
+Raycast-spawned child processes don't inherit Terminal's LANG, so `pbcopy` treats UTF-8 Chinese bytes as Latin-1 and pastes garbled text. The script forces:
 ```bash
 export LANG="${LANG:-en_US.UTF-8}"
 export LC_ALL="${LC_ALL:-en_US.UTF-8}"
@@ -168,9 +168,9 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
 ---
 
-## 📦 安装
+## 📦 Installation
 
-### Homebrew Tap（推荐 · v1.1.1+）
+### Homebrew Tap (recommended · v1.1.1+)
 
 ```bash
 brew tap aimer1124/tap
@@ -178,18 +178,18 @@ brew install local-voice-input
 vinput setup
 ```
 
-`vinput setup` 是 Homebrew 包装的"二段式"补全 —— `brew install` 只负责把脚本和 HUD 二进制部署到 `libexec/`，下面这些会在 `vinput setup` 里完成：
+`vinput setup` is the second stage of Homebrew's two-step bootstrap — `brew install` only deploys the scripts and the HUD binary into `libexec/`. The following happen inside `vinput setup`:
 
-1. `brew install sox jq whisper-cpp ollama`（已存在则跳过）
-2. 下载 Whisper `large-v3-turbo-q5_0` 模型（~547MB）
-3. 把 `vinput / vinput.sh / vinput_bg.sh / hud` 软链到 `~/.whisper_models/`
-4. 写入默认配置 `~/.config/vinput.conf` + 热词词表
-5. 部署 Raycast 命令脚本到 `~/.config/raycast-scripts/`
-6. 启动 Ollama 服务 + 拉取 `qwen2.5:3b`（~2GB）+ 预热
+1. `brew install sox jq whisper-cpp ollama` (skipped if already present)
+2. Download the Whisper `large-v3-turbo-q5_0` model (~547MB)
+3. Symlink `vinput / vinput.sh / vinput_bg.sh / hud` into `~/.whisper_models/`
+4. Write the default config `~/.config/vinput.conf` + hotword list
+5. Deploy the Raycast command script to `~/.config/raycast-scripts/`
+6. Start the Ollama service, pull `qwen2.5:3b` (~2GB), and pre-warm it
 
-升级：`brew upgrade local-voice-input`（脚本是 symlink，自动跟随版本）。
+Upgrade with `brew upgrade local-voice-input` (the scripts are symlinks, so they follow the version automatically).
 
-### 源码安装（开发者 / 不想用 brew）
+### From source (developers / no brew)
 
 ```bash
 git clone https://github.com/aimer1124/local-voice-input.git
@@ -197,91 +197,92 @@ cd local-voice-input
 ./install.sh
 ```
 
-`install.sh` 走的是历史路径：自动检查 Homebrew → `brew install` 依赖 → `brew install --cask raycast` → 下载 Whisper 模型 → 编译 / 下载 HUD 二进制 → 复制脚本到 `~/.whisper_models/` → 预热 Ollama。和 `vinput setup` 等价，只是不依赖 brew tap。
+`install.sh` follows the original path: it checks for Homebrew → `brew install` the dependencies → `brew install --cask raycast` → download the Whisper model → compile/download the HUD binary → copy scripts to `~/.whisper_models/` → pre-warm Ollama. It's equivalent to `vinput setup`, just without depending on the brew tap.
 
-支持几个开关（可组合，`--help` 看全部）：
+It supports a few flags (combinable; run `--help` for the full list):
 
 ```bash
-./install.sh --dry-run        # 只检查环境 + 打印将执行的动作，不下载/不写任何文件
-./install.sh --upgrade-only   # 只刷新脚本和 HUD，跳过依赖与模型（升级最快）
-./install.sh --skip-models    # 跳过 Whisper(~550MB)+Ollama(~2GB) 下载（离线机用 USB 拷模型）
+./install.sh --dry-run        # only check the environment + print planned actions; download/write nothing
+./install.sh --upgrade-only   # refresh only the scripts and HUD, skip deps and models (fastest upgrade)
+./install.sh --skip-models    # skip the Whisper (~550MB) + Ollama (~2GB) downloads (copy models via USB on offline machines)
 ```
 
-### 手动配置（自动化无法覆盖的部分）
+### Manual setup (the parts automation can't cover)
 
-完成 `install.sh` 后，还需要在系统设置里：
+After `install.sh` finishes, you still need to do the following in System Settings:
 
-1. **隐私 → 麦克风**：勾选 Raycast（首次触发时 sox 会自动弹窗，点允许）
-2. **隐私 → 辅助功能**：勾选 Raycast（用于自动 ⌘V 粘贴）
-3. **Raycast 设置 → Extensions → Script Commands**
-   - Add Script Directory：`~/.config/raycast-scripts`
-   - 给 `🎙️ 语音输入` 绑定快捷键（推荐 `⌘⇧Space`）
+1. **Privacy → Microphone**: enable Raycast (sox prompts automatically on first trigger — click Allow)
+2. **Privacy → Accessibility**: enable Raycast (used for the automatic ⌘V paste)
+3. **Raycast Settings → Extensions → Script Commands**
+   - Add Script Directory: `~/.config/raycast-scripts`
+   - Bind a hotkey to the **🎙️ 语音输入** ("Voice Input") command (recommended: `⌘⇧Space`)
 
-> 漏了第 2 步也不会卡死：辅助功能没授权时，转写结果会照常进剪贴板，vinput 会提示
-> 「📋 已复制到剪贴板 · 自动粘贴需勾选辅助功能」并**自动帮你打开对应设置面板**，授权
-> 后即恢复自动粘贴。授权前手动按 `⌘V` 即可。
+> Skipping step 2 won't break things: without Accessibility permission the transcription still lands on
+> the clipboard, and vinput shows "📋 Copied to clipboard · auto-paste needs Accessibility" while
+> **opening the relevant Settings panel for you**. Auto-paste resumes once granted; press `⌘V` manually
+> until then.
 
-### 系统要求
+### Requirements
 
 - macOS 13+
-- Apple Silicon（M1/M2/M3/M4）
-- 16 GB 内存推荐（8 GB 也能跑）
-- 3 GB 磁盘空间
-- 能用的麦克风（**注意**：纯音乐用的 3 极有线耳机会让 macOS 把输入路由到无信号的耳机口）
+- Apple Silicon (M1/M2/M3/M4)
+- 16 GB RAM recommended (8 GB also works)
+- 3 GB disk space
+- A working microphone (**note**: 3-pole TRS music headphones make macOS route input to the dead headphone port)
 
 ---
 
-## 🚀 使用
+## 🚀 Usage
 
-### 基础用法
+### Basics
 
-1. 把光标点进任意文本框（编辑器、浏览器、聊天窗口都行）
-2. 按你设的快捷键（如 ⌘⇧Space）
-3. 听到 Pop 音后说话
-4. 说完再按一次快捷键
-5. 等 2–4 秒，文字自动粘贴到光标位置
+1. Click your cursor into any text field (editor, browser, chat window — all fine)
+2. Press your hotkey (e.g., ⌘⇧Space)
+3. Speak after the Pop sound
+4. Press the hotkey once more when done
+5. Wait 2–4s; the text is auto-pasted at the cursor
 
-### 性能预算（10 秒中文音频）
+### Performance budget (10s of audio)
 
-| 阶段 | 耗时 |
+| Stage | Time |
 |---|---|
-| 录音 | 你说多久就多久 |
-| Whisper 转写 | ~2 s |
-| Ollama 润色 | ~1 s（短文本跳过）/ ~2 s（长文本）|
-| 粘贴 | < 0.1 s |
-| **总额外延迟** | **2–4 秒** |
+| Recording | as long as you speak |
+| Whisper transcription | ~2s |
+| Ollama refinement | ~1s (short text skips it) / ~2s (long text) |
+| Paste | < 0.1s |
+| **Total added latency** | **2–4s** |
 
 ---
 
-## ⚙️ 配置
+## ⚙️ Configuration
 
-配置集中在 `~/.config/vinput.conf`。**设计原则是开箱即用** —— 默认模板只放「大多数人真正会改」的几项，全部带推荐默认值；删掉或留空任意一项都会回退到内置默认，不会报错：
+Configuration lives in `~/.config/vinput.conf`. **The design principle is works-out-of-the-box** — the default template only includes the handful of knobs "most people will actually change", all with recommended defaults. Deleting or blanking any one of them falls back to the built-in default without error:
 
 ```bash
 # === Whisper ASR ===
 MODEL_PATH="$HOME/.whisper_models/ggml-large-v3-turbo-q5_0.bin"
-WHISPER_LANG="zh"              # 中英混读靠热词 prompt 引导
+WHISPER_LANG="zh"              # mixed CN/EN is guided by the hotword prompt
 
-# === Ollama LLM 润色 ===
+# === Ollama LLM refinement ===
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
-SHORT_TEXT_THRESHOLD=15        # 短于此字数（中文 1 字=1）跳过 LLM，省 1–2 秒
+SHORT_TEXT_THRESHOLD=15        # text shorter than this (CN: 1 char = 1) skips the LLM, saving 1–2s
 
-# === 录音 / 粘贴行为 ===
-AUTO_PASTE=1                   # 1=自动 ⌘V（需辅助功能权限），0=只复制
-USE_VAD=0                      # 0=纯 toggle（推荐），1=静音自动停（仅安静环境）
-MAX_REC_SECONDS=30             # 录音硬超时（秒）
-SOX_GAIN_DB=-3                 # 小声/远离麦克风调大：+6~+12（负=衰减）
+# === Recording / paste behavior ===
+AUTO_PASTE=1                   # 1 = auto ⌘V (needs Accessibility), 0 = copy only
+USE_VAD=0                      # 0 = pure toggle (recommended), 1 = auto-stop on silence (quiet rooms only)
+MAX_REC_SECONDS=30             # recording hard timeout (seconds)
+SOX_GAIN_DB=-3                 # too quiet / far from mic? raise to +6~+12 (negative = attenuate)
 
-# === 热词词表（可选）===
+# === Hotword list (optional) ===
 HOTWORDS_FILE="$HOME/.config/vinput_hotwords.txt"
 ```
 
-> 想调 Whisper 解码内参、SoX 滤波、动态 prompt、VAD 阈值等？见下方 [进阶配置](#-进阶配置)。这些默认值已针对中文 + 程序员场景调优，一般不用动。
+> Want to tune Whisper's internal decoding params, SoX filtering, dynamic prompts, VAD thresholds, etc.? See [Advanced Configuration](#-advanced-configuration) below. These defaults are already tuned for Chinese + programmer workflows and usually don't need touching.
 
-### 热词词表
+### Hotword list
 
-`~/.config/vinput_hotwords.txt`，每行一个术语，会注入 Whisper prompt 提升识别准确率：
+`~/.config/vinput_hotwords.txt`, one term per line, injected into the Whisper prompt to improve recognition accuracy:
 
 ```
 API
@@ -292,48 +293,47 @@ PostgreSQL
 ...
 ```
 
-### HUD 样式调整
+### HUD style adjustments
 
-无需重新编译，在 `~/.config/vinput.conf` 里设置即可，下次触发就生效：
+No recompile needed — set these in `~/.config/vinput.conf` and they take effect on the next trigger:
 
-| 配置项 | 默认 | 说明 |
+| Setting | Default | Description |
 |---|---|---|
-| `HUD_Y_PERCENT` | `18` | 距屏幕底部百分比（0=贴底 / 50=正中 / 100=贴顶） |
-| `HUD_HEIGHT` | `96` | 窗口高度（像素） |
-| `HUD_FONT_SIZE` | `26` | 字号 |
+| `HUD_Y_PERCENT` | `18` | Distance from the screen bottom as a percentage (0 = bottom / 50 = center / 100 = top) |
+| `HUD_HEIGHT` | `96` | Window height (pixels) |
+| `HUD_FONT_SIZE` | `26` | Font size |
 | `HUD_FONT_WEIGHT` | `semibold` | `ultraLight`/`thin`/`light`/`regular`/`medium`/`semibold`/`bold`/`heavy`/`black` |
-| `HUD_CORNER_RADIUS` | `20` | 圆角弧度 |
-| `HUD_MATERIAL` | `hudWindow` | 毛玻璃风格：`hudWindow`/`sidebar`/`popover`/`menu`/…（详见 `NSVisualEffectView.Material`） |
-| `HUD_WIDTH_MIN` | `220` | 自适应宽度下限 |
-| `HUD_WIDTH_MAX` | `900` | 自适应宽度上限 |
+| `HUD_CORNER_RADIUS` | `20` | Corner radius |
+| `HUD_MATERIAL` | `hudWindow` | Frosted-glass style: `hudWindow`/`sidebar`/`popover`/`menu`/… (see `NSVisualEffectView.Material`) |
+| `HUD_WIDTH_MIN` | `220` | Lower bound for adaptive width |
+| `HUD_WIDTH_MAX` | `900` | Upper bound for adaptive width |
 
-也支持单次临时覆盖（不动配置文件）：
+One-off overrides are also supported (without touching the config file):
 ```bash
-HUD_Y_PERCENT=50 HUD_FONT_SIZE=36 ~/.whisper_models/hud "测试样式" 2
+HUD_Y_PERCENT=50 HUD_FONT_SIZE=36 ~/.whisper_models/hud "test style" 2
 ```
 
 ---
 
-## 🧩 进阶配置
+## 🧩 Advanced Configuration
 
-下面这些**没有放进默认配置模板**，因为默认值已针对中文 + 程序员场景调优，绝大多数人不用动。
-需要时手动加进 `~/.config/vinput.conf` 即可（留空 = 用内置默认，不会报错）。改 Whisper/LLM
-相关项后请按 [回归测试](#-回归测试pre-tag-必跑) 跑一遍再用。
+These are **not in the default config template**, because the defaults are already tuned for Chinese + programmer workflows and the vast majority of people won't touch them.
+Add them to `~/.config/vinput.conf` by hand when needed (blank = built-in default, no error). After changing any Whisper/LLM-related setting, run the [Regression Tests](#-regression-tests-must-run-before-tagging) once before relying on it.
 
-### Whisper 解码内参
+### Whisper decoding internals
 
 ```bash
-WHISPER_THREADS=8             # 推理线程数
-WHISPER_BEAM_SIZE=5           # beam search 路数，减少同音字误选；延迟 +0.5s
-WHISPER_TEMPERATURE_INC=0.2   # 温度递增步长，失败时温度采样兜底防吐空
-# WHISPER_TEMPERATURE=0       # 起始温度，留空=whisper.cpp 默认
-# WHISPER_NO_SPEECH_THOLD=0.6 # 越小越严。⚠️ v1.1.3 调严后普通麦全判"非语音"，v1.1.6 改回默认(留空)
-# WHISPER_LOGPROB_THOLD=-1.0  # 越接近 0 越严。同上，仅 doctor 显示信号偏弱时再考虑
+WHISPER_THREADS=8             # inference threads
+WHISPER_BEAM_SIZE=5           # beam-search width, reduces homophone misses; +0.5s latency
+WHISPER_TEMPERATURE_INC=0.2   # temperature increment step, a sampling fallback against empty output on failure
+# WHISPER_TEMPERATURE=0       # starting temperature; blank = whisper.cpp default
+# WHISPER_NO_SPEECH_THOLD=0.6 # lower = stricter. ⚠️ v1.1.3's stricter value judged ordinary mics as "non-speech"; v1.1.6 reverted to default (blank)
+# WHISPER_LOGPROB_THOLD=-1.0  # closer to 0 = stricter. Same story; only consider it if doctor reports a weak signal
 ```
 
-### 动态 Prompt 上下文
+### Dynamic prompt context
 
-把最近 N 次成功转写拼到 Whisper `--prompt` 前，给模型「短期记忆」。实测连续聊同一话题时专有名词命中率 +20~40%。
+Prepends the last N successful transcriptions to Whisper's `--prompt` to give the model "short-term memory". In practice, proper-noun hit rate is +20~40% when chatting about the same topic in a row.
 
 ```bash
 USE_RECENT_PROMPT=1
@@ -342,19 +342,19 @@ RECENT_PROMPT_FILE="$HOME/.cache/vinput/recent.txt"
 RECENT_PROMPT_MAX_CHARS=280
 ```
 
-### SoX 录音预处理
+### SoX recording preprocessing
 
-> ⚠️ 所有效果必须 streaming-safe（不能依赖整流 buffer）。v1.1.4 用过 `norm -3`，导致 rec 在 SIGINT 时 0 帧输出 → "未识别到有效语音"。v1.1.7 改回固定 gain。
+> ⚠️ Every effect must be streaming-safe (cannot depend on a full-rectification buffer). v1.1.4 used `norm -3`, which made rec output 0 frames on SIGINT → "no valid speech detected". v1.1.7 reverted to a fixed gain.
 
 ```bash
 USE_SOX_PREPROCESS=1
-SOX_HIGHPASS=80     # 切低频：风扇 / 街道嗡嗡声
-SOX_LOWPASS=8000    # 切高频：嘶嘶声 / 抖动
-SOX_GAIN_DB=-3      # 固定增益（已在基础配置，此处列全）
-REC_WARMUP_MS=150   # rec 启动后等 buffer 就绪再提示说话，避免首字丢失
+SOX_HIGHPASS=80     # cut low frequencies: fan / street rumble
+SOX_LOWPASS=8000    # cut high frequencies: hiss / jitter
+SOX_GAIN_DB=-3      # fixed gain (already in the basic config; listed here for completeness)
+REC_WARMUP_MS=150   # wait for rec's buffer to be ready before prompting you to speak, avoiding a dropped first word
 ```
 
-### VAD 阈值（仅 `USE_VAD=1` 时生效）
+### VAD thresholds (only when `USE_VAD=1`)
 
 ```bash
 SILENCE_TAIL=1.5
@@ -362,171 +362,170 @@ SILENCE_START_THRESHOLD="0.5%"
 SILENCE_STOP_THRESHOLD="6%"
 ```
 
-### HUD 终态显示 & ↑ 重录
+### HUD final state & ↑ re-record
 
 ```bash
-# HUD_SHOW_RESULT=1       # 粘贴后 HUD 显示真正粘贴的内容（截断 60 字）
-# HUD_FINAL_DURATION=2.5  # 终态停留秒数
-# HUD_RERUN_ON_UP=0       # 1=终态显示期间按 ↑ 立即重跑一次完整流水线（ESC 永远立即关闭）
+# HUD_SHOW_RESULT=1       # after pasting, the HUD shows what was actually pasted (truncated to 60 chars)
+# HUD_FINAL_DURATION=2.5  # how many seconds the final state lingers
+# HUD_RERUN_ON_UP=0       # 1 = press ↑ during the final state to instantly re-run the full pipeline (ESC always closes immediately)
 ```
 
-> `HUD_RERUN_ON_UP=1` 需在**系统设置 → 隐私 → 输入监控**给 hud 二进制（路径见 `vinput --doctor`）打勾。
-> 没给权限时 HUD 仍正常显示，只是 ↑ 无效——这是个便利功能，默认关。
+> `HUD_RERUN_ON_UP=1` requires checking the hud binary (path via `vinput --doctor`) in **System Settings → Privacy → Input Monitoring**.
+> Without permission the HUD still displays fine, ↑ just does nothing — it's a convenience feature, off by default.
 
-HUD 外观（位置/字号/材质等 8 项）见上方 [HUD 样式调整](#hud-样式调整)。
+HUD appearance (8 knobs: position/font/material/etc.) is covered in [HUD style adjustments](#hud-style-adjustments) above.
 
 ---
 
-## 🗂️ 项目结构
+## 🗂️ Project Structure
 
 ```
 vinput/
-├── README.md                          # 本文档
-├── README.en.md                       # English version
+├── README.md                          # this document (English, default)
+├── README.zh.md                       # Chinese version
 ├── LICENSE                            # MIT
-├── install.sh                         # 一键安装
-├── uninstall.sh                       # 卸载
+├── install.sh                         # one-shot install
+├── uninstall.sh                       # uninstall
 ├── bin/
-│   ├── vinput.sh                      # 前台手动版（终端 Ctrl+C）
-│   └── vinput_bg.sh                   # 后台版（Raycast 调用）
+│   ├── vinput.sh                      # foreground manual version (terminal Ctrl+C)
+│   └── vinput_bg.sh                   # background version (called by Raycast)
 ├── raycast/
-│   └── voice-input.sh                 # Raycast 命令封装
+│   └── voice-input.sh                 # Raycast command wrapper
 ├── src/
-│   └── hud.swift                      # 屏幕中央 HUD 源码
+│   └── hud.swift                      # screen-center HUD source
 ├── config/
-│   ├── vinput.conf.example            # 配置模板
-│   └── vinput_hotwords.example.txt    # 热词模板
-└── assets/                            # 截图/演示资源
+│   ├── vinput.conf.example            # config template
+│   └── vinput_hotwords.example.txt    # hotword template
+└── assets/                            # screenshots / demo assets
 ```
 
 ---
 
-## 🆚 vs 商用输入法
+## 🆚 vs Commercial IMEs
 
-| 维度 | vinput | 微信/讯飞/豆包 |
+| Dimension | vinput | WeChat / iFlytek / Doubao |
 |---|---|---|
-| 隐私 | ✅ 100% 本地 | ❌ 上传云端 |
-| 离线可用 | ✅ | ❌ |
-| 专业术语 | ✅ 自定义热词 + LLM 重构 | ⚠️ 通用词库 |
-| 意图重构 | ✅ AI 提炼成 Prompt | ❌ 只做转写 |
-| 流式输出 | ❌ 必须录完才识别 | ✅ 边说边出字 |
-| 任意位置直接输入 | ⚠️ 经剪贴板中转 | ✅ 系统级 IME |
-| 候选词/纠错 | ❌ | ✅ |
-| 方言支持 | ⚠️ 仅普通话强 | ✅ 几十种方言 |
+| Privacy | ✅ 100% local | ❌ Uploaded to the cloud |
+| Works offline | ✅ | ❌ |
+| Technical terms | ✅ Custom hotwords + LLM refinement | ⚠️ Generic vocabulary |
+| Intent refinement | ✅ AI distills into a prompt | ❌ Transcription only |
+| Streaming output | ❌ Must finish recording first | ✅ Text as you speak |
+| Direct insertion anywhere | ⚠️ Relayed via clipboard | ✅ System-level IME |
+| Candidates / correction | ❌ | ✅ |
+| Dialect support | ⚠️ Mandarin only | ✅ Dozens of dialects |
 
-**最佳定位**：把 vinput 当成 **"AI Prompt 口述按钮"**，跟系统输入法分工 —— vinput 用于写给 Claude/Cursor/ChatGPT 的长 prompt，系统输入法用于聊天/密码/短回复。
+**Best positioning**: treat vinput as an **"AI prompt dictation button"** that divides labor with your system IME — vinput for long prompts to Claude/Cursor/ChatGPT, the system IME for chat/passwords/short replies.
 
 ---
 
-## 🔧 故障排查
+## 🔧 Troubleshooting
 
-**一键诊断**（推荐先跑这个）：
+**One-shot diagnosis** (run this first):
 ```bash
 ~/.whisper_models/vinput --doctor
 ```
-会自动检查工具链、资源文件、Ollama 状态、HUD 可用性，并跑一次 3 秒麦克风录音测试，按"健康/偏弱/几乎静音"输出 RMS 值。
+It checks the toolchain, resource files, Ollama status, and HUD availability, then runs a 3-second mic recording test and reports the RMS value as "healthy / weak / nearly silent".
 
-| 症状 | 命令 / 操作 |
+| Symptom | Command / action |
 |---|---|
-| Raycast 没反应 | 检查命令是否出现、快捷键有无冲突 |
-| 只复制了没自动粘贴 | 系统设置 → 隐私 → 辅助功能 勾选 Raycast（vinput 会自动提示并打开该面板） |
-| 录音失败 | `tail -50 /tmp/vinput_debug.log` |
-| 不确定哪里出问题 | `~/.whisper_models/vinput --doctor` |
-| 麦克风电平测试 | `rec -q /tmp/t.wav trim 0 3 && sox /tmp/t.wav -n stat \| grep RMS` |
-| 默认输入设备 | 系统设置 → 声音 → 输入（用 MacBook Pro Microphone） |
-| 卡死的录音 | `pkill -f "rec -q"; rm -rf /tmp/vinput.lock.d` |
-| Ollama 没启动 | `brew services start ollama` |
-| HUD 不显示 | `~/.whisper_models/hud "测试" 2` |
-| 中文乱码 | 确认脚本含 `export LANG="en_US.UTF-8"` |
+| Raycast does nothing | Check the command appears and the hotkey isn't conflicting |
+| Copied but didn't auto-paste | System Settings → Privacy → Accessibility, enable Raycast (vinput prompts and opens the panel for you) |
+| Recording failed | `tail -50 /tmp/vinput_debug.log` |
+| Not sure where it broke | `~/.whisper_models/vinput --doctor` |
+| Mic level test | `rec -q /tmp/t.wav trim 0 3 && sox /tmp/t.wav -n stat \| grep RMS` |
+| Default input device | System Settings → Sound → Input (use MacBook Pro Microphone) |
+| Stuck recording | `pkill -f "rec -q"; rm -rf /tmp/vinput.lock.d` |
+| Ollama not running | `brew services start ollama` |
+| HUD not showing | `~/.whisper_models/hud "test" 2` |
+| Garbled Chinese | Confirm the script contains `export LANG="en_US.UTF-8"` |
 
 ---
 
-## 📚 进阶
+## 📚 Going Further
 
-### 切换更快的 Whisper 模型
+### Switch to a faster Whisper model
 
-| 模型 | 体积 | 速度 | 中文质量 |
+| Model | Size | Speed | Chinese quality |
 |---|---|---|---|
-| `ggml-tiny.bin` | 75 MB | 极快 | 差 |
-| `ggml-base.bin` | 142 MB | 快 | 一般 |
-| `ggml-small.bin` | 466 MB | 中等 | 中等 |
-| **`ggml-large-v3-turbo-q5_0.bin`** | **547 MB** | **快** | **强烈推荐** |
-| `ggml-large-v3.bin` | 3 GB | 慢 | 最高 |
+| `ggml-tiny.bin` | 75 MB | blazing | poor |
+| `ggml-base.bin` | 142 MB | fast | so-so |
+| `ggml-small.bin` | 466 MB | medium | medium |
+| **`ggml-large-v3-turbo-q5_0.bin`** | **547 MB** | **fast** | **strongly recommended** |
+| `ggml-large-v3.bin` | 3 GB | slow | highest |
 
-### 切换更快的 Ollama 模型
+### Switch to a faster Ollama model
 
-| 模型 | 速度 | 润色质量 |
+| Model | Speed | Refinement quality |
 |---|---|---|
-| `qwen2.5:1.5b` | ⚡⚡⚡ | 一般 |
-| **`qwen2.5:3b`** | **⚡⚡** | **平衡（推荐）** |
-| `qwen2.5:7b` | ⚡ | 更强 |
-| `gemma2:2b` | ⚡⚡⚡ | 替代选择 |
+| `qwen2.5:1.5b` | ⚡⚡⚡ | so-so |
+| **`qwen2.5:3b`** | **⚡⚡** | **balanced (recommended)** |
+| `qwen2.5:7b` | ⚡ | stronger |
+| `gemma2:2b` | ⚡⚡⚡ | alternative choice |
 
 ```bash
 ollama pull qwen2.5:1.5b
-# 然后改 ~/.config/vinput.conf 里的 OLLAMA_MODEL="qwen2.5:1.5b"
+# then set OLLAMA_MODEL="qwen2.5:1.5b" in ~/.config/vinput.conf
 ```
 
 ---
 
-## 📜 转写历史 & 错词挖掘
+## 📜 Transcription History & Mistake Mining
 
-每次成功转写都会 append 到 `~/.cache/vinput/history.jsonl`（纯本地，纯文本）。
+Every successful transcription is appended to `~/.cache/vinput/history.jsonl` (fully local, plain text).
 
 ```bash
-vinput history                  # 最近 20 条彩色表格
-vinput history --tail 100       # 最近 100 条
-vinput history --grep qwen      # 搜索（在 raw/corrected/cleaned 三列）
-vinput history --raw-only       # 只看原始 Whisper 输出（便于 grep 错词）
+vinput history                  # last 20 entries as a colored table
+vinput history --tail 100       # last 100 entries
+vinput history --grep qwen      # search (across the raw/corrected/cleaned columns)
+vinput history --raw-only       # raw Whisper output only (handy for grepping mistakes)
 ```
 
-发现错词后一条命令补进纠错表：
+Once you spot a mistake, add it to the correction table with one command:
 
 ```bash
 vinput add-correction "Claude Code" "克劳德 code"
 ```
 
-> 隐私：日志只在本地，永不出机。要清空就 `rm ~/.cache/vinput/history.jsonl`。
+> Privacy: the log stays local and never leaves the machine. To wipe it: `rm ~/.cache/vinput/history.jsonl`.
 
 ---
 
-## 🧪 回归测试（pre-tag 必跑）
+## 🧪 Regression Tests (must run before tagging)
 
-三层 ASR 流水线 = 三组测试套件 + 一个 lint：
+A three-layer ASR pipeline = three test suites + one lint:
 
-| 层 | 套件 | 命令 | 价值 |
+| Layer | Suite | Command | Value |
 |---|---|---|---|
-| Whisper 转写 | [`tests/asr/`](./tests/asr/) | `bash tests/asr/run.sh` | 6 条 TTS 音频 + CER 预算 |
-| 谐音纠错 | （数据驱动，无需测） | `vinput corrections` | TSV 即真值 |
-| LLM 整形 | [`tests/llm/`](./tests/llm/) | `bash tests/llm/run.sh` | 6 个 case + 必含/绝不含约束 |
-| 防御性 | `scripts/lint-shell.sh` | `bash scripts/lint-shell.sh` | grep `$VAR<非ASCII>` set -u 陷阱 |
+| Whisper transcription | [`tests/asr/`](./tests/asr/) | `bash tests/asr/run.sh` | 6 TTS clips + a CER budget |
+| Homophone correction | (data-driven, no test needed) | `vinput corrections` | the TSV is the ground truth |
+| LLM shaping | [`tests/llm/`](./tests/llm/) | `bash tests/llm/run.sh` | 6 cases + must-contain / must-not-contain constraints |
+| Defensive | `scripts/lint-shell.sh` | `bash scripts/lint-shell.sh` | greps `$VAR<non-ASCII>` set -u traps |
 
-修改 `bin/vinput_bg.sh`、Whisper/LLM 参数、`config/*` 之前**必须跑**对应层。退出码 0 才能 tag。
+Before modifying `bin/vinput_bg.sh`, the Whisper/LLM params, or `config/*`, you **must run** the corresponding layer. Only an exit code of 0 clears it for tagging.
 
-> 为什么：v1.1.3 → v1.1.7 四个 hotfix 都是「改了 ASR 参数没回归」的产物。v1.1.5 / v1.1.8 又
-> 是 `set -u` 中文括号陷阱。这套基建直接挡掉这两个 bug class。
+> Why: the four hotfixes from v1.1.3 → v1.1.7 were all "changed an ASR param without a regression". v1.1.5 / v1.1.8 were the `set -u` Chinese-parenthesis trap. This harness blocks both bug classes outright.
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎 PR / Issue。建议方向：
-- 给回归套件 [tests/asr/](./tests/asr/) 提样本（真人录音、方言、噪声场景）
-- Linux/Windows 移植（替换 Raycast、osascript、HUD）
-- 流式识别（whisper-streaming / faster-whisper）
-- 不依赖剪贴板的直接注入（用 CGEventPost 输入 Unicode）
-- 更多语言/方言模型预设
+PRs / issues welcome. Suggested directions:
+- Contribute samples to the regression suite [tests/asr/](./tests/asr/) (real recordings, dialects, noisy scenarios)
+- Linux/Windows ports (replace Raycast, osascript, the HUD)
+- Streaming recognition (whisper-streaming / faster-whisper)
+- Clipboard-free direct injection (type Unicode via CGEventPost)
+- More language/dialect model presets
 
 ---
 
 ## 📄 License
 
-MIT —— 详见 [LICENSE](./LICENSE)
+MIT — see [LICENSE](./LICENSE)
 
 ---
 
-## 🙏 致谢
+## 🙏 Acknowledgements
 
-- [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — Whisper 本地推理
-- [Ollama](https://ollama.com/) — 本地 LLM 引擎
-- [Qwen](https://github.com/QwenLM/Qwen) — 阿里巴巴开源 LLM
-- [Raycast](https://www.raycast.com/) — 现代化 macOS Launcher
-- [SoX](http://sox.sourceforge.net/) — 音频录制工具链
+- [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — local Whisper inference
+- [Ollama](https://ollama.com/) — local LLM engine
+- [Qwen](https://github.com/QwenLM/Qwen) — Alibaba's open-source LLM
+- [Raycast](https://www.raycast.com/) — modern macOS launcher
+- [SoX](http://sox.sourceforge.net/) — audio recording toolchain

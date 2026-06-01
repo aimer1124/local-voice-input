@@ -1,12 +1,142 @@
 # Contributing to local-voice-input
 
-> 中文 | [English ↓](#english)
+> English | [中文 ↓](#中文)
+
+Thanks for your interest in **local-voice-input**!
+
+## 🛠️ Local development
+
+### Setup
+
+```bash
+git clone https://github.com/aimer1124/local-voice-input.git
+cd local-voice-input
+./install.sh
+```
+
+### Dev loop
+
+```bash
+# 1. Edit bin/vinput_bg.sh or src/hud.swift
+vim bin/vinput_bg.sh
+
+# 2. Deploy to the runtime location
+cp bin/vinput_bg.sh ~/.whisper_models/vinput_bg.sh
+swiftc -O src/hud.swift -o ~/.whisper_models/hud
+
+# 3. Trigger a test
+~/.whisper_models/vinput_bg.sh
+# Or press your Raycast hotkey
+```
+
+### Debugging
+
+```bash
+tail -f /tmp/vinput_debug.log               # background script logs
+pgrep -lf "vinput|rec -q|ollama"            # rec / Ollama / Whisper process tree
+~/.whisper_models/hud "test message" 2      # standalone HUD test
+```
+
+## 📝 Commit style
+
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <subject>
+
+<body>
+```
+
+`<type>` values:
+- `feat`: a new feature
+- `fix`: a bug fix
+- `docs`: documentation
+- `refactor`: refactoring
+- `perf`: performance
+- `ci`: CI/CD changes
+- `chore`: chores (dependency bumps, config, etc.)
+
+Example:
+```
+feat(hud): make position configurable via vinput.conf
+
+Adds HUD_Y_OFFSET_PERCENT to vinput.conf. The Swift binary now reads
+an env var passed by vinput_bg.sh instead of being recompiled.
+```
+
+## 🔀 PR flow
+
+1. Fork → create a branch on your fork: `git checkout -b feat/something`
+2. Commit (following the format above)
+3. Push to your fork
+4. Open a Pull Request against `main` on GitHub
+5. In the PR description include: **what** you did, **why**, and **how to verify**
+
+## 🚀 Release process (maintainers only)
+
+See [docs/RELEASE_TEMPLATE.md](./docs/RELEASE_TEMPLATE.md). Short version:
+
+```bash
+# 1. Copy the bilingual notes template and fill it in
+cp docs/RELEASE_TEMPLATE.md /tmp/notes-vX.Y.Z.md
+# Edit...
+
+# 2. Create the release (also pushes the tag, triggering CI)
+gh release create vX.Y.Z \
+    --title "vX.Y.Z — short title" \
+    --notes-file /tmp/notes-vX.Y.Z.md \
+    --target main
+
+# 3. ~20s later CI auto-builds hud + hud.sha256 and uploads them
+```
+
+## 🎬 Contributing the demo GIF
+
+The README demo GIF is compressed by [`scripts/make-demo-gif.sh`](./scripts/make-demo-gif.sh). Full workflow:
+
+1. Use macOS **⇧⌘5** to record ("Record Selected Portion"), framing a 1200×675 region
+2. Inside the recorded area, perform a full vinput demo:
+   - Click your cursor into a text field
+   - Press ⌘⇧Space → wait for the Pop sound → speak a sentence (e.g., "write me a Python function that reads a CSV and filters out empty rows")
+   - Press ⌘⇧Space again → wait for the Tink sound → HUD transitions → text appears
+3. Stop recording and move the generated mov to `/tmp/demo.mov`
+4. Run the converter:
+   ```bash
+   ./scripts/make-demo-gif.sh
+   ```
+5. Output goes to `assets/demo.gif`, auto-validated to be ≤ 5MB
+6. If too large, tune params and re-run:
+   ```bash
+   FPS=10 WIDTH=900 QUALITY=70 ./scripts/make-demo-gif.sh
+   ```
+7. Once happy, commit `assets/demo.gif` and add `![demo](./assets/demo.gif)` to the README top
+
+## 🐛 Reporting bugs
+
+Please report bugs via [GitHub Issues](https://github.com/aimer1124/local-voice-input/issues/new/choose). The issue template will ask for:
+- macOS version + chip
+- vinput version (`git rev-parse HEAD` or the release tag)
+- Recent content of `/tmp/vinput_debug.log`
+- Reproduction steps
+
+## 💡 Feature requests
+
+Like bug reports, use the "Feature request" issue template. Please explain:
+- What problem you want solved
+- The behavior you expect
+- (Optional) an implementation idea
+
+---
+
+## 中文
+
+> [English ↑](#contributing-to-local-voice-input)
 
 感谢你对 **local-voice-input** 的兴趣！
 
-## 🛠️ 本地开发
+### 🛠️ 本地开发
 
-### 环境准备
+#### 环境准备
 
 ```bash
 # 克隆并跑安装脚本部署一份可用环境
@@ -15,7 +145,7 @@ cd local-voice-input
 ./install.sh
 ```
 
-### 开发循环
+#### 开发循环
 
 ```bash
 # 1. 改 bin/vinput_bg.sh 或 src/hud.swift
@@ -30,7 +160,7 @@ swiftc -O src/hud.swift -o ~/.whisper_models/hud
 # 或按你绑定的 Raycast 快捷键
 ```
 
-### 调试技巧
+#### 调试技巧
 
 ```bash
 # 查看后台脚本日志
@@ -43,7 +173,7 @@ pgrep -lf "vinput|rec -q|ollama"
 ~/.whisper_models/hud "test message" 2
 ```
 
-## 📝 提交规范
+### 📝 提交规范
 
 使用 [Conventional Commits](https://www.conventionalcommits.org/) 风格：
 
@@ -70,7 +200,7 @@ Adds HUD_Y_OFFSET_PERCENT to vinput.conf. The Swift binary now reads
 an env var passed by vinput_bg.sh instead of being recompiled.
 ```
 
-## 🔀 PR 流程
+### 🔀 PR 流程
 
 1. Fork → 在你的 fork 上建分支：`git checkout -b feat/something`
 2. 提交（遵循上面的格式）
@@ -78,7 +208,7 @@ an env var passed by vinput_bg.sh instead of being recompiled.
 4. 在 GitHub 上发 Pull Request 到 `main`
 5. PR 描述里包含：**做了什么**、**为什么这么做**、**怎么验证**
 
-## 🚀 发版流程（仅维护者）
+### 🚀 发版流程（仅维护者）
 
 详见 [docs/RELEASE_TEMPLATE.md](./docs/RELEASE_TEMPLATE.md)。简版：
 
@@ -96,7 +226,7 @@ gh release create vX.Y.Z \
 # 3. CI 约 20 秒后自动 build hud + hud.sha256 并上传
 ```
 
-## 🎬 贡献演示 GIF
+### 🎬 贡献演示 GIF
 
 README 顶部的演示 GIF 由 [`scripts/make-demo-gif.sh`](./scripts/make-demo-gif.sh) 处理压缩。完整工作流程：
 
@@ -117,7 +247,7 @@ README 顶部的演示 GIF 由 [`scripts/make-demo-gif.sh`](./scripts/make-demo-
    ```
 7. 满意后 commit `assets/demo.gif` 并把 README 顶部加上 `![demo](./assets/demo.gif)`
 
-## 🐛 报告 Bug
+### 🐛 报告 Bug
 
 请通过 [GitHub Issues](https://github.com/aimer1124/local-voice-input/issues/new/choose) 报告 bug。issue 模板会要求你提供：
 - macOS 版本 + 芯片
@@ -125,103 +255,9 @@ README 顶部的演示 GIF 由 [`scripts/make-demo-gif.sh`](./scripts/make-demo-
 - `/tmp/vinput_debug.log` 最近内容
 - 复现步骤
 
-## 💡 提交功能建议
+### 💡 提交功能建议
 
 跟报 bug 类似，用 issue 模板里的 "Feature request"。请说明：
 - 你希望解决什么问题
 - 你期望的行为
 - （可选）实现思路
-
----
-
-## English
-
-Thanks for your interest in **local-voice-input**!
-
-### Local development
-
-```bash
-git clone https://github.com/aimer1124/local-voice-input.git
-cd local-voice-input
-./install.sh
-```
-
-### Dev loop
-
-```bash
-# Edit bin/vinput_bg.sh or src/hud.swift
-vim bin/vinput_bg.sh
-
-# Deploy to runtime location
-cp bin/vinput_bg.sh ~/.whisper_models/vinput_bg.sh
-swiftc -O src/hud.swift -o ~/.whisper_models/hud
-
-# Trigger a test
-~/.whisper_models/vinput_bg.sh
-# Or press your Raycast hotkey
-```
-
-### Debugging
-
-```bash
-tail -f /tmp/vinput_debug.log               # background script logs
-pgrep -lf "vinput|rec -q|ollama"            # process tree
-~/.whisper_models/hud "test message" 2      # standalone HUD test
-```
-
-### Commit style
-
-We follow [Conventional Commits](https://www.conventionalcommits.org/).
-
-Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `ci`, `chore`.
-
-### Pull requests
-
-1. Fork → branch `feat/something`
-2. Commit (Conventional format)
-3. Push to your fork
-4. Open PR against `main`
-5. Describe: **what**, **why**, **how to verify**
-
-### Reporting bugs
-
-Use [issue templates](https://github.com/aimer1124/local-voice-input/issues/new/choose). Include:
-- macOS version + chip
-- vinput version
-- Recent `/tmp/vinput_debug.log` content
-- Reproduction steps
-
-### Release process (maintainers only)
-
-See [docs/RELEASE_TEMPLATE.md](./docs/RELEASE_TEMPLATE.md). Short version:
-
-```bash
-cp docs/RELEASE_TEMPLATE.md /tmp/notes-vX.Y.Z.md
-# Edit...
-gh release create vX.Y.Z \
-    --title "vX.Y.Z — short title" \
-    --notes-file /tmp/notes-vX.Y.Z.md \
-    --target main
-# CI uploads hud + hud.sha256 within ~20s
-```
-
-### Contributing the demo GIF
-
-The README demo GIF is processed by [`scripts/make-demo-gif.sh`](./scripts/make-demo-gif.sh). Workflow:
-
-1. Use macOS **⇧⌘5** to record (Record Selected Portion), 1200×675 region recommended
-2. Inside the recorded area, perform a full demo:
-   - Click into a text field
-   - Press ⌘⇧Space → wait for Pop sound → speak a sentence
-   - Press ⌘⇧Space again → wait for Tink → HUD transitions → text appears
-3. Stop recording, move the generated mov to `/tmp/demo.mov`
-4. Run the converter:
-   ```bash
-   ./scripts/make-demo-gif.sh
-   ```
-5. Output goes to `assets/demo.gif` (auto-validated ≤ 5MB)
-6. If too large, re-run with stricter params:
-   ```bash
-   FPS=10 WIDTH=900 QUALITY=70 ./scripts/make-demo-gif.sh
-   ```
-7. Commit `assets/demo.gif` and add `![demo](./assets/demo.gif)` to README top
