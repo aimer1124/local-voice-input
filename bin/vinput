@@ -24,6 +24,7 @@ HOTWORDS_FILE="${HOTWORDS_FILE:-$CONFIG_DIR/vinput_hotwords.txt}"
 CORRECTIONS_FILE="${CORRECTIONS_FILE:-$CONFIG_DIR/vinput_corrections.tsv}"
 HISTORY_FILE="${HISTORY_FILE:-$HOME/.cache/vinput/history.jsonl}"
 HUD_BIN="${HUD_BIN:-$WHISPER_DIR/hud}"
+RAYCAST_DIR="${RAYCAST_DIR:-$CONFIG_DIR/raycast-scripts}"
 
 # ── 输出工具（颜色 + 段落标题）─────────────────────────
 G=$'\033[0;32m'; Y=$'\033[1;33m'; R=$'\033[0;31m'; C=$'\033[0;36m'; N=$'\033[0m'
@@ -32,6 +33,146 @@ warn()  { echo "${Y}⚠${N} $*"; }
 err()   { echo "${R}✗${N} $*"; }
 hint()  { echo "  ${C}→${N} $*"; }
 section() { echo; echo "${C}═══ $* ═══${N}"; }
+
+resolve_file() {
+    local path="$1"
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$path" 2>/dev/null || printf '%s\n' "$path"
+    else
+        local src="$path" tgt
+        while [ -L "$src" ]; do
+            tgt=$(readlink "$src")
+            case "$tgt" in
+                /*) src="$tgt" ;;
+                *)  src="$(dirname "$src")/$tgt" ;;
+            esac
+        done
+        printf '%s\n' "$src"
+    fi
+}
+
+print_effective_config() {
+    section "有效配置"
+    printf "  VERSION=%s\n" "$VERSION"
+    printf "  WHISPER_DIR=%s\n" "$WHISPER_DIR"
+    printf "  MODEL_PATH=%s\n" "$MODEL_PATH"
+    printf "  OLLAMA_MODEL=%s\n" "$OLLAMA_MODEL"
+    printf "  OLLAMA_URL=%s\n" "$OLLAMA_URL"
+    printf "  HOTWORDS_FILE=%s\n" "$HOTWORDS_FILE"
+    printf "  CORRECTIONS_FILE=%s\n" "$CORRECTIONS_FILE"
+    printf "  HISTORY_FILE=%s\n" "$HISTORY_FILE"
+    printf "  HUD_BIN=%s\n" "$HUD_BIN"
+    printf "  RAYCAST_DIR=%s\n" "$RAYCAST_DIR"
+}
+
+check_runtime_layout() {
+    local fails_ref="$1" warns_ref="$2"
+    local linked=0 stale=0 f target script_real installed_version
+
+    section "运行目录"
+    if [ -d "$WHISPER_DIR" ]; then
+        ok "运行目录        $WHISPER_DIR"
+    else
+        err "运行目录缺失    $WHISPER_DIR"
+        eval "$fails_ref=\$(( $fails_ref + 1 ))"
+        return
+    fi
+
+    for f in vinput vinput.sh vinput_bg.sh hud; do
+        if [ -e "$WHISPER_DIR/$f" ]; then
+            target=$(resolve_file "$WHISPER_DIR/$f")
+            if [ -L "$WHISPER_DIR/$f" ]; then
+                ok "$f → $target"
+                linked=$((linked + 1))
+                if [ "$f" = "vinput" ]; then
+                    installed_version=$(printf '%s\n' "$target" | sed -n 's#.*/local-voice-input/\([^/]*\)/.*#\1#p')
+                    if [ -n "$installed_version" ] && [ "$installed_version" != "$VERSION" ]; then
+                        warn "运行版版本不一致: vinput 链到 ${installed_version}，当前脚本声明 $VERSION"
+                        hint "正式使用时运行 brew upgrade local-voice-input && vinput setup；开发调试时可忽略"
+                        eval "$warns_ref=\$(( $warns_ref + 1 ))"
+                    fi
+                fi
+            else
+                warn "$f 不是软链    $WHISPER_DIR/$f"
+                eval "$warns_ref=\$(( $warns_ref + 1 ))"
+            fi
+        else
+            warn "$f 缺失          $WHISPER_DIR/$f"
+            eval "$warns_ref=\$(( $warns_ref + 1 ))"
+        fi
+    done
+
+    script_real=$(resolve_file "${BASH_SOURCE[0]}")
+    case "$script_real" in
+        "$WHISPER_DIR"/*)
+            warn "当前 vinput 从运行目录源码直接执行，通常应通过软链指向安装/开发目录"
+            eval "$warns_ref=\$(( $warns_ref + 1 ))"
+            ;;
+    esac
+
+    for f in hud.swift vinput_bg.sh.bak vinput.old; do
+        if [ -e "$WHISPER_DIR/$f" ]; then
+            stale=$((stale + 1))
+            warn "运行目录残留    $WHISPER_DIR/$f"
+            hint "运行目录只应放模型、软链和状态；源码请维护在主仓 src/ 或 bin/ 下"
+        fi
+    done
+    if [ "$stale" -gt 0 ]; then
+        eval "$warns_ref=\$(( $warns_ref + $stale ))"
+    fi
+    [ "$linked" -gt 0 ] && ok "运行入口软链    $linked 个入口已链接"
+}
+
+check_raycast_scripts() {
+    local fails_ref="$1" warns_ref="$2"
+    local expected_bg="$WHISPER_DIR/vinput_bg.sh"
+    local expected_home="\$HOME/.whisper_models/vinput_bg.sh"
+    local script target expected_name has_dev=0
+
+    section "Raycast 命令"
+    if [ ! -d "$RAYCAST_DIR" ]; then
+        warn "Raycast 脚本目录缺失: $RAYCAST_DIR"
+        hint "运行 vinput setup 安装脚本，或在 Raycast 添加 ~/.config/raycast-scripts"
+        eval "$warns_ref=\$(( $warns_ref + 1 ))"
+        return
+    fi
+    ok "Raycast 目录    $RAYCAST_DIR"
+
+    for script in voice-input.sh voice-input-raw.sh voice-input-en.sh; do
+        target="$RAYCAST_DIR/$script"
+        if [ ! -f "$target" ]; then
+            warn "$script 缺失"
+            eval "$warns_ref=\$(( $warns_ref + 1 ))"
+            continue
+        fi
+        if [ -x "$target" ]; then
+            ok "$script 可执行"
+        else
+            err "$script 不可执行"
+            eval "$fails_ref=\$(( $fails_ref + 1 ))"
+        fi
+        if grep -Fq "$expected_bg" "$target" || grep -Fq "$expected_home" "$target"; then
+            ok "$script 指向运行入口"
+        elif grep -Fq "/local-voice-input/bin/vinput_bg.sh" "$target"; then
+            warn "$script 指向开发仓库入口"
+            hint "发布/正式使用时建议运行 vinput setup，让 Raycast 全部指向 $expected_bg"
+            has_dev=1
+        else
+            warn "$script 未指向标准入口: $expected_bg"
+            eval "$warns_ref=\$(( $warns_ref + 1 ))"
+        fi
+    done
+
+    if [ "$has_dev" = "1" ]; then
+        eval "$warns_ref=\$(( $warns_ref + 1 ))"
+    fi
+
+    expected_name="voice-input-en.sh"
+    if [ -f "$RAYCAST_DIR/$expected_name" ] && ! grep -Fq "VINPUT_TRANSLATE_EN=1" "$RAYCAST_DIR/$expected_name"; then
+        warn "$expected_name 存在但未启用 VINPUT_TRANSLATE_EN=1"
+        eval "$warns_ref=\$(( $warns_ref + 1 ))"
+    fi
+}
 
 # ── --version ─────────────────────────────────────────
 cmd_version() {
@@ -56,9 +197,27 @@ cmd_version() {
 
 # ── --doctor ──────────────────────────────────────────
 cmd_doctor() {
+    local quick=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --quick) quick=1 ;;
+            --help|-h)
+                cat <<'EOF'
+vinput doctor — 运行环境诊断
+
+  --quick   只检查配置、运行目录、Raycast 脚本和工具链；跳过 Ollama、HUD、麦克风运行时探测
+EOF
+                return 0
+                ;;
+            *) err "未知参数: $1"; exit 2 ;;
+        esac
+        shift
+    done
+
     local fails=0 warns=0
 
     echo "${C}🩺 vinput doctor ($VERSION)${N}"
+    print_effective_config
 
     # ─── 工具链 ───
     section "工具链 (PATH)"
@@ -72,6 +231,9 @@ cmd_doctor() {
             ((fails++))
         fi
     done
+
+    check_runtime_layout fails warns
+    check_raycast_scripts fails warns
 
     # ─── 资源 ───
     section "资源文件"
@@ -105,7 +267,25 @@ cmd_doctor() {
         ok "热词词表        $HOTWORDS_FILE ($count 词)"
     else
         warn "热词词表缺失    $HOTWORDS_FILE (将使用脚本内置默认词)"
+            ((warns++))
+    fi
+
+    if [ "$quick" = "1" ]; then
+        section "运行时状态"
+        warn "quick 模式已跳过 Ollama/HUD/麦克风探测"
         ((warns++))
+        section "总结"
+        if [ "$fails" -eq 0 ] && [ "$warns" -eq 0 ]; then
+            ok "${G}一切就绪，可以正常使用。${N}"
+            return 0
+        fi
+        if [ "$fails" -gt 0 ]; then
+            err "$fails 项需要修复"
+        fi
+        if [ "$warns" -gt 0 ]; then
+            warn "$warns 项警告（不一定影响使用）"
+        fi
+        [ "$fails" -gt 0 ] && return 1 || return 0
     fi
 
     # ─── 运行时 ───
@@ -337,7 +517,7 @@ cmd_setup() {
     local raycast_dir="$HOME/.config/raycast-scripts"
     mkdir -p "$raycast_dir"
     local installed=0
-    for rs in voice-input.sh voice-input-raw.sh; do
+    for rs in voice-input.sh voice-input-raw.sh voice-input-en.sh; do
         local raycast_src="$root/raycast/$rs"
         local raycast_dst="$raycast_dir/$rs"
         if [ -f "$raycast_src" ]; then
@@ -630,7 +810,8 @@ vinput — local-voice-input CLI ($VERSION)
 用法:
   vinput setup                              一键完成依赖安装/模型下载/脚本部署（首次安装后跑一次）
   vinput --version                          显示版本号
-  vinput --doctor                           运行诊断检查（工具链 / 资源 / 运行时 / 麦克风）
+  vinput --doctor [--quick]                 运行诊断检查（配置 / Raycast / 工具链 / 运行时 / 麦克风）
+  vinput config                             打印当前生效配置
   vinput corrections                        列出所有谐音纠错规则
   vinput add-correction <对> <错>           追加一条纠错（自动去重）
   vinput remove-correction <对> <错>        删除一条
@@ -649,7 +830,8 @@ EOF
 # ── 路由 ──────────────────────────────────────────────
 case "${1:-help}" in
     --version|-V|version)         cmd_version ;;
-    --doctor|doctor)              cmd_doctor ;;
+    --doctor|doctor)              shift; cmd_doctor "$@" ;;
+    config)                       print_effective_config ;;
     --setup|setup)                cmd_setup ;;
     corrections)                  cmd_corrections ;;
     add-correction)               shift; cmd_add_correction "$@" ;;

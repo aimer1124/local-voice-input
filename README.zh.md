@@ -215,7 +215,7 @@ cd local-voice-input
 2. **隐私 → 辅助功能**：勾选 Raycast（用于自动 ⌘V 粘贴）
 3. **Raycast 设置 → Extensions → Script Commands**
    - Add Script Directory：`~/.config/raycast-scripts`
-   - 给 `🎙️ 语音输入` 绑定快捷键（推荐 `⌘⇧Space`）
+   - 给 `🎙️ 语音输入` 绑定快捷键（推荐 `⌘⇧Space`）。Raw 和 EN 命令可选，见下方 [模式](#模式三个-raycast-命令)。
 
 > 漏了第 2 步也不会卡死：辅助功能没授权时，转写结果会照常进剪贴板，vinput 会提示
 > 「📋 已复制到剪贴板 · 自动粘贴需勾选辅助功能」并**自动帮你打开对应设置面板**，授权
@@ -240,6 +240,18 @@ cd local-voice-input
 3. 听到 Pop 音后说话
 4. 说完再按一次快捷键
 5. 等 2–4 秒，文字自动粘贴到光标位置
+
+### 模式（三个 Raycast 命令）
+
+vinput 提供三个 Raycast 命令，共用同一条流水线（`vinput_bg.sh`），只在 LLM 那步不同。各绑一个快捷键即可：
+
+| 命令 | 快捷键（建议） | LLM 步骤 | 输出 |
+|---|---|---|---|
+| **🎙️ 语音输入**（默认） | `⌘⇧Space` | 把中文口语提炼成中文书面 prompt | 中文（夹英文） |
+| **📝 语音输入 (Raw)** | `⌥Space` | 跳过 | Whisper 转写原文，保留口语原貌 |
+| **🌐 语音输入 (EN)** | `⌃⇧Space` | 把中文口语翻译+整形成英文 prompt | 英文 |
+
+> EN 模式仍按 `-l zh` 转写你说的中文，再在 LLM 那步翻译并收紧成简洁的英文指令。它**总是**走 LLM（忽略 `SHORT_TEXT_THRESHOLD`）——否则短中文短语会原样返回中文。
 
 ### 性能预算（10 秒中文音频）
 
@@ -379,6 +391,12 @@ HUD 外观（位置/字号/材质等 8 项）见上方 [HUD 样式调整](#hud-�
 
 ## 🗂️ 项目结构
 
+这套项目有三层，不要把安装后的运行目录当成源码仓库：
+
+- **主源码仓库**：`local-voice-input`（本文档所在仓库），维护脚本、HUD 源码、Raycast 模板、配置模板、测试与 release notes。
+- **Homebrew tap 仓库**：`homebrew-tap`，只维护 `Formula/local-voice-input.rb`，指向某个 GitHub tag tarball 和 release 里的 `hud` 二进制。
+- **本机运行目录**：`~/.whisper_models`，只放 Whisper 模型和运行入口软链。`vinput setup` 会把 `vinput` / `vinput_bg.sh` / `hud` 链接到这里；不要在这里维护源码副本。
+
 ```
 vinput/
 ├── README.md                          # English version（默认）
@@ -387,17 +405,43 @@ vinput/
 ├── install.sh                         # 一键安装
 ├── uninstall.sh                       # 卸载
 ├── bin/
+│   ├── vinput                         # CLI：setup / doctor / history / corrections
 │   ├── vinput.sh                      # 前台手动版（终端 Ctrl+C）
 │   └── vinput_bg.sh                   # 后台版（Raycast 调用）
 ├── raycast/
-│   └── voice-input.sh                 # Raycast 命令封装
+│   ├── voice-input.sh                 # 完整流水线
+│   ├── voice-input-raw.sh             # 跳过 LLM
+│   └── voice-input-en.sh              # 中文口述 → 英文 prompt
 ├── src/
 │   └── hud.swift                      # 屏幕中央 HUD 源码
 ├── config/
 │   ├── vinput.conf.example            # 配置模板
-│   └── vinput_hotwords.example.txt    # 热词模板
+│   ├── vinput_hotwords.example.txt    # 热词模板
+│   └── vinput_corrections.example.tsv # 纠错表模板
+├── tests/
+│   ├── integration/                   # 无麦克风/无网络 CLI 集成测试
+│   ├── llm/                           # Ollama prompt 清理回归
+│   └── asr/                           # Whisper 音频样本回归
+├── scripts/
+│   ├── lint-shell.sh                  # shell 兼容性 lint
+│   ├── preflight.sh                   # 发布前确定性检查
+│   └── release.sh                     # release/tap 协调脚本
 └── assets/                            # 截图/演示资源
 ```
+
+发布前建议先跑：
+
+```bash
+bash scripts/preflight.sh
+```
+
+需要同时跑本地 LLM/ASR 回归时：
+
+```bash
+RUN_LLM=1 RUN_ASR=1 bash scripts/preflight.sh
+```
+
+更新 Homebrew tap 时用 `scripts/release.sh --version X.Y.Z` 做版本和流程检查，再用 `--apply --source-sha ... --hud-sha ...` 写入 tap formula。
 
 ---
 
@@ -424,7 +468,14 @@ vinput/
 ```bash
 ~/.whisper_models/vinput --doctor
 ```
-会自动检查工具链、资源文件、Ollama 状态、HUD 可用性，并跑一次 3 秒麦克风录音测试，按"健康/偏弱/几乎静音"输出 RMS 值。
+会自动检查有效配置、运行目录、Raycast 命令入口、工具链、资源文件、Ollama 状态、HUD 可用性，并跑一次 3 秒麦克风录音测试，按"健康/偏弱/几乎静音"输出 RMS 值。
+
+只想看配置/入口结构、不碰 Ollama 和麦克风：
+
+```bash
+~/.whisper_models/vinput --doctor --quick
+~/.whisper_models/vinput config
+```
 
 | 症状 | 命令 / 操作 |
 |---|---|

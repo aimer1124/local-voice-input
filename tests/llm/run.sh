@@ -53,7 +53,7 @@ check_case() {
     fi
     # Side channel: emit output via env-like global
     LAST_OUTPUT="$out"
-    LAST_FAILS="${fails[*]}"
+    LAST_FAILS="${fails[*]-}"
 }
 
 # LLMs are stochastic. Retry up to MAX_TRIES before declaring fail —

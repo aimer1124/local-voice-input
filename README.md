@@ -215,7 +215,7 @@ After `install.sh` finishes, you still need to do the following in System Settin
 2. **Privacy → Accessibility**: enable Raycast (used for the automatic ⌘V paste)
 3. **Raycast Settings → Extensions → Script Commands**
    - Add Script Directory: `~/.config/raycast-scripts`
-   - Bind a hotkey to the **🎙️ 语音输入** ("Voice Input") command (recommended: `⌘⇧Space`)
+   - Bind a hotkey to the **🎙️ 语音输入** ("Voice Input") command (recommended: `⌘⇧Space`). The Raw and EN commands are optional — see [Modes](#modes-three-raycast-commands) below.
 
 > Skipping step 2 won't break things: without Accessibility permission the transcription still lands on
 > the clipboard, and vinput shows "📋 Copied to clipboard · auto-paste needs Accessibility" while
@@ -241,6 +241,18 @@ After `install.sh` finishes, you still need to do the following in System Settin
 3. Speak after the Pop sound
 4. Press the hotkey once more when done
 5. Wait 2–4s; the text is auto-pasted at the cursor
+
+### Modes (three Raycast commands)
+
+vinput ships three Raycast script commands that share the same pipeline (`vinput_bg.sh`) and differ only in the LLM step. Bind each to its own hotkey:
+
+| Command | Hotkey (suggested) | LLM step | Output |
+|---|---|---|---|
+| **🎙️ 语音输入** (default) | `⌘⇧Space` | distill Chinese speech into a written Chinese prompt | Chinese (mixed CN/EN) |
+| **📝 语音输入 (Raw)** | `⌥Space` | skipped | raw Whisper transcript, as spoken |
+| **🌐 语音输入 (EN)** | `⌃⇧Space` | translate + reshape Chinese speech into an English prompt | English |
+
+> EN mode still transcribes your Chinese speech with `-l zh`, then translates and tightens it into a concise English instruction in the LLM step. It **always** runs the LLM (ignores `SHORT_TEXT_THRESHOLD`) — otherwise a short Chinese phrase would come back unchanged in Chinese.
 
 ### Performance budget (10s of audio)
 
@@ -379,6 +391,18 @@ HUD appearance (8 knobs: position/font/material/etc.) is covered in [HUD style a
 
 ## 🗂️ Project Structure
 
+This project has three layers; the installed runtime directory is not the
+source repository:
+
+- **Source repo**: `local-voice-input` (this repo), containing scripts, HUD
+  source, Raycast templates, config templates, tests, and release notes.
+- **Homebrew tap repo**: `homebrew-tap`, containing only
+  `Formula/local-voice-input.rb`, which points at a GitHub tag tarball and the
+  release `hud` binary.
+- **Local runtime directory**: `~/.whisper_models`, containing Whisper models
+  and runtime symlinks. `vinput setup` links `vinput`, `vinput_bg.sh`, and
+  `hud` here; do not maintain source copies in this directory.
+
 ```
 vinput/
 ├── README.md                          # this document (English, default)
@@ -387,17 +411,44 @@ vinput/
 ├── install.sh                         # one-shot install
 ├── uninstall.sh                       # uninstall
 ├── bin/
+│   ├── vinput                         # CLI: setup / doctor / history / corrections
 │   ├── vinput.sh                      # foreground manual version (terminal Ctrl+C)
 │   └── vinput_bg.sh                   # background version (called by Raycast)
 ├── raycast/
-│   └── voice-input.sh                 # Raycast command wrapper
+│   ├── voice-input.sh                 # full pipeline
+│   ├── voice-input-raw.sh             # skip the LLM step
+│   └── voice-input-en.sh              # Chinese dictation → English prompt
 ├── src/
 │   └── hud.swift                      # screen-center HUD source
 ├── config/
 │   ├── vinput.conf.example            # config template
-│   └── vinput_hotwords.example.txt    # hotword template
+│   ├── vinput_hotwords.example.txt    # hotword template
+│   └── vinput_corrections.example.tsv # correction table template
+├── tests/
+│   ├── integration/                   # no-mic/no-network CLI integration tests
+│   ├── llm/                           # Ollama prompt-cleaning regression tests
+│   └── asr/                           # Whisper audio-sample regression tests
+├── scripts/
+│   ├── lint-shell.sh                  # shell compatibility lint
+│   ├── preflight.sh                   # deterministic pre-release checks
+│   └── release.sh                     # release/tap coordination helper
 └── assets/                            # screenshots / demo assets
 ```
+
+Before releasing, run:
+
+```bash
+bash scripts/preflight.sh
+```
+
+To include local LLM/ASR regression suites:
+
+```bash
+RUN_LLM=1 RUN_ASR=1 bash scripts/preflight.sh
+```
+
+Use `scripts/release.sh --version X.Y.Z` to validate the source release flow,
+then `--apply --source-sha ... --hud-sha ...` to update the Homebrew tap formula.
 
 ---
 
@@ -424,7 +475,14 @@ vinput/
 ```bash
 ~/.whisper_models/vinput --doctor
 ```
-It checks the toolchain, resource files, Ollama status, and HUD availability, then runs a 3-second mic recording test and reports the RMS value as "healthy / weak / nearly silent".
+It checks effective config, runtime layout, Raycast command entrypoints, the toolchain, resource files, Ollama status, and HUD availability, then runs a 3-second mic recording test and reports the RMS value as "healthy / weak / nearly silent".
+
+To inspect config and entrypoint structure without touching Ollama or the microphone:
+
+```bash
+~/.whisper_models/vinput --doctor --quick
+~/.whisper_models/vinput config
+```
 
 | Symptom | Command / action |
 |---|---|

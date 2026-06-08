@@ -226,7 +226,7 @@ if [ ! -f "$CONFIG_DIR/vinput_corrections.tsv" ]; then
 fi
 
 run mkdir -p "$RAYCAST_DIR"
-for rs in voice-input.sh voice-input-raw.sh; do
+for rs in voice-input.sh voice-input-raw.sh voice-input-en.sh; do
     run cp "$REPO_DIR/raycast/$rs" "$RAYCAST_DIR/$rs"
     run chmod +x "$RAYCAST_DIR/$rs"
 done
