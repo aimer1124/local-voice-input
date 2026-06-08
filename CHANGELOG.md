@@ -6,7 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
-## [Unreleased]
+## [1.7.0] — 2026-06-08
+
+Headline: **EN mode** — speak Chinese, paste an English prompt — plus a long-audio quality guard.
+The release also hardens the transcription internals: the whisper-cli flag list now has a single
+source of truth, and the ASR regression suite finally covers long-form dictation (the case that
+degrades most), with the dead-end tuning experiments archived so they aren't re-run.
 
 ### Added
 - **EN mode — a third Raycast command (`🌐 语音输入 (EN)`)** — speak Chinese, get an English
