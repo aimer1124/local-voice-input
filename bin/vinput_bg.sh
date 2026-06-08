@@ -444,12 +444,25 @@ fi
 if [ "$MODE" = "toggle" ]; then
     if [ -f "$REC_PID_FILE" ]; then
         REC_PID=$(cat "$REC_PID_FILE" 2>/dev/null)
-        if [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null; then
+        # 锁年龄健全性检查：一次健康录音 = 录音(≤MAX_REC_SECONDS) + 转写(数秒)，远低于此上限。
+        # 超过则判定为僵尸录音（守卫没杀掉 rec / rec 被孤儿化），强制回收而不是去「停止」它 ——
+        # 否则一个卡死的 rec 会让之后每次触发都卡在「已停止，转写中」。
+        LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || date +%s) ))
+        STALE_CEILING=$(( MAX_REC_SECONDS + 60 ))
+        if [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null && [ "$LOCK_AGE" -le "$STALE_CEILING" ]; then
+            # 正常 toggle：停止进行中的录音（硬超时守卫已含 KILL 兜底，这里发 INT 即可）
             kill -INT "$REC_PID" 2>/dev/null
             afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &
             hud "🛑 已停止，转写中..." 60
             exit 0
         else
+            # pid 已死（上次正在转写）或锁早已过期（僵尸）。若 pid 还活着且确认是 rec 进程，
+            # 强杀回收；用 ps 核对命令名，避免误杀 pid 复用后的无关进程。
+            if [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null \
+               && ps -p "$REC_PID" -o command= 2>/dev/null | grep -q 'rec '; then
+                kill -INT "$REC_PID" 2>/dev/null; sleep 1
+                kill -KILL "$REC_PID" 2>/dev/null
+            fi
             rm -rf "$LOCK_DIR"
             if ! mkdir "$LOCK_DIR" 2>/dev/null; then
                 hud "❌ 锁冲突，请重试" 2
@@ -525,7 +538,11 @@ fi
 afplay /System/Library/Sounds/Pop.aiff 2>/dev/null &
 hud "🎙️ 录音中... (再按快捷键停止)" 60
 
-( sleep "$MAX_REC_SECONDS" && kill -INT "$REC_PID" 2>/dev/null ) &
+# 硬超时守卫：先 INT 优雅停；rec 若拒收 INT（音频设备 wedge 时会发生），3s 后 KILL 兜底。
+# ⚠️ 没有这层 KILL，rec 会永久运行 → 锁永不释放 → 之后每次触发都被误判成「已停止，转写中」
+#    （实测过一次：rec 卡了两天，必须 kill -9 才掉）。下面的 wait 正常返回后会 kill 掉本守卫，
+#    所以正常录音里这层 KILL 永远不会触发。
+( sleep "$MAX_REC_SECONDS"; kill -INT "$REC_PID" 2>/dev/null; sleep 3; kill -KILL "$REC_PID" 2>/dev/null ) &
 GUARD_PID=$!
 
 wait "$REC_PID" 2>/dev/null

@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.7.0"
+VERSION="1.7.1"
 GITHUB_REPO="aimer1124/local-voice-input"
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
