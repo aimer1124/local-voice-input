@@ -44,6 +44,20 @@ WHISPER_TEMPERATURE_INC="${WHISPER_TEMPERATURE_INC:-0.2}"  # 失败时温度递�
 WHISPER_NO_SPEECH_THOLD="${WHISPER_NO_SPEECH_THOLD:-}"     # 留空 = whisper.cpp 默认 (0.6)
 WHISPER_LOGPROB_THOLD="${WHISPER_LOGPROB_THOLD:-}"         # 留空 = whisper.cpp 默认 (-1.0)
 
+# 长音频解码调节（逃生舱，默认全空 = 维持 whisper.cpp 默认）——
+# 录音超过 30s 时 whisper 内部按 30s 窗口逐段解码，下面几项控制窗间行为。
+#
+# ⚠️ 实测踩坑（tests/asr 的 07-zh-long, 66s 样本，见该目录 README「长音频调参」）：
+#   这几项**都不是默认开**是有原因的。把 max-context 设小（64/32）不仅没救长句，反而
+#   连单窗短句一起退化（截断了 --prompt 热词）：long CER 0.117→0.39、tech 0.025→0.15。
+#   entropy-thold / carry-initial-prompt / 加大 beam 在该样本上均**零增益**。
+#   也试过换模型（turbo-q8_0、完整 large-v3-q5_0）与静音切片重拼，均未改善甚至更差。
+#   结论：长音频 raw CER 的地板是同音字 + 偶发窗口边界漏字，靠这些 flag 调不动 ——
+#   真正的兜底在下游的谐音纠错表 + LLM 整形。保留这些 knob 只为手动实验，别当默认开。
+WHISPER_ENTROPY_THOLD="${WHISPER_ENTROPY_THOLD:-}"     # 留空 = whisper.cpp 默认 (2.40)
+WHISPER_MAX_CONTEXT="${WHISPER_MAX_CONTEXT:-}"         # 留空 = whisper.cpp 默认 (-1)；设小实测有害，见上
+WHISPER_CARRY_PROMPT="${WHISPER_CARRY_PROMPT:-0}"      # 1 = 每个窗口都重带初始 prompt；实测无增益
+
 # 动态 prompt 上下文（v1.1.4）— 拼接最近成功转写作为 Whisper 短期记忆
 USE_RECENT_PROMPT="${USE_RECENT_PROMPT:-1}"
 RECENT_PROMPT_COUNT="${RECENT_PROMPT_COUNT:-5}"
@@ -73,6 +87,25 @@ HUD_BIN="${HUD_BIN:-$HOME/.whisper_models/hud}"
 export HUD_Y_PERCENT HUD_HEIGHT HUD_FONT_SIZE HUD_FONT_WEIGHT \
        HUD_CORNER_RADIUS HUD_MATERIAL HUD_WIDTH_MIN HUD_WIDTH_MAX \
        HUD_ON_UP_CMD
+
+# ──────────────────────────────────────────────────────────────
+# 组装 whisper-cli 参数 —— 测试钩子 (--test-transcribe) 与生产路径共用同一处。
+# 历史上这两处是各写一遍、靠注释提醒「保持同步」，新增 flag 时极易漏改一处导致测试
+# 与线上不一致。收敛成一个函数后，flag 只有这一处真相。
+# 用法：build_whisper_args <input.wav> <txt_out_prefix>；结果写入全局数组 WHISPER_ARGS。
+build_whisper_args() {
+    local _in="$1" _of="$2"
+    WHISPER_ARGS=(-t "$WHISPER_THREADS" -m "$MODEL_PATH" -f "$_in" -l "$WHISPER_LANG")
+    [ -n "$WHISPER_BEAM_SIZE" ]       && WHISPER_ARGS+=(--beam-size "$WHISPER_BEAM_SIZE")
+    [ -n "$WHISPER_TEMPERATURE" ]     && WHISPER_ARGS+=(--temperature "$WHISPER_TEMPERATURE")
+    [ -n "$WHISPER_TEMPERATURE_INC" ] && WHISPER_ARGS+=(--temperature-inc "$WHISPER_TEMPERATURE_INC")
+    [ -n "$WHISPER_NO_SPEECH_THOLD" ] && WHISPER_ARGS+=(--no-speech-thold "$WHISPER_NO_SPEECH_THOLD")
+    [ -n "$WHISPER_LOGPROB_THOLD" ]   && WHISPER_ARGS+=(--logprob-thold "$WHISPER_LOGPROB_THOLD")
+    [ -n "$WHISPER_ENTROPY_THOLD" ]   && WHISPER_ARGS+=(--entropy-thold "$WHISPER_ENTROPY_THOLD")
+    [ -n "$WHISPER_MAX_CONTEXT" ]     && WHISPER_ARGS+=(--max-context "$WHISPER_MAX_CONTEXT")
+    [ "$WHISPER_CARRY_PROMPT" = "1" ] && WHISPER_ARGS+=(--carry-initial-prompt)
+    WHISPER_ARGS+=(--prompt "$HOTWORDS" -otxt -of "$_of" -nt -np)
+}
 
 # ──────────────────────────────────────────────────────────────
 # 谐音/同音纠错表（v1.2.0 #18）— 应用在 Whisper 输出之后、LLM 整形之前。
@@ -385,13 +418,7 @@ if [ "${1:-}" = "--test-transcribe" ] && [ -n "${2:-}" ]; then
         HOTWORDS=""
     fi
 
-    WHISPER_ARGS=(-t "$WHISPER_THREADS" -m "$MODEL_PATH" -f "$test_wav" -l "$WHISPER_LANG")
-    [ -n "$WHISPER_BEAM_SIZE" ]       && WHISPER_ARGS+=(--beam-size "$WHISPER_BEAM_SIZE")
-    [ -n "$WHISPER_TEMPERATURE" ]     && WHISPER_ARGS+=(--temperature "$WHISPER_TEMPERATURE")
-    [ -n "$WHISPER_TEMPERATURE_INC" ] && WHISPER_ARGS+=(--temperature-inc "$WHISPER_TEMPERATURE_INC")
-    [ -n "$WHISPER_NO_SPEECH_THOLD" ] && WHISPER_ARGS+=(--no-speech-thold "$WHISPER_NO_SPEECH_THOLD")
-    [ -n "$WHISPER_LOGPROB_THOLD" ]   && WHISPER_ARGS+=(--logprob-thold "$WHISPER_LOGPROB_THOLD")
-    WHISPER_ARGS+=(--prompt "$HOTWORDS" -otxt -of "$TXT_PATH" -nt -np)
+    build_whisper_args "$test_wav" "$TXT_PATH"
 
     whisper-cli "${WHISPER_ARGS[@]}" > /dev/null 2>&1 || true
 
@@ -515,18 +542,11 @@ if [ ! -f "$AUDIO_PATH" ] || [ ! -s "$AUDIO_PATH" ]; then
     exit 1
 fi
 
-# 解码参数（v1.1.3）：
+# 解码参数（v1.1.3 起）：见脚本顶部 WHISPER_* 配置块与 build_whisper_args()。
 #   --beam-size 5            5 路 beam search，减少同音字误选
 #   --temperature 0          + --temperature-inc 0.2 失败时温度递增重试（避免空输出）
-#   --no-speech-thold 0.5    静音段不再被填充成幻觉
-#   --logprob-thold -0.8     低置信度段直接丢
-WHISPER_ARGS=(-t "$WHISPER_THREADS" -m "$MODEL_PATH" -f "$AUDIO_PATH" -l "$WHISPER_LANG")
-[ -n "$WHISPER_BEAM_SIZE" ]       && WHISPER_ARGS+=(--beam-size "$WHISPER_BEAM_SIZE")
-[ -n "$WHISPER_TEMPERATURE" ]     && WHISPER_ARGS+=(--temperature "$WHISPER_TEMPERATURE")
-[ -n "$WHISPER_TEMPERATURE_INC" ] && WHISPER_ARGS+=(--temperature-inc "$WHISPER_TEMPERATURE_INC")
-[ -n "$WHISPER_NO_SPEECH_THOLD" ] && WHISPER_ARGS+=(--no-speech-thold "$WHISPER_NO_SPEECH_THOLD")
-[ -n "$WHISPER_LOGPROB_THOLD" ]   && WHISPER_ARGS+=(--logprob-thold "$WHISPER_LOGPROB_THOLD")
-WHISPER_ARGS+=(--prompt "$HOTWORDS" -otxt -of "$TXT_PATH" -nt -np)
+#   --max-context / --entropy-thold / --carry-initial-prompt  长音频抗退化
+build_whisper_args "$AUDIO_PATH" "$TXT_PATH"
 
 # VINPUT_DEBUG_KEEP=1 时保留最近一次录音 + whisper 输出到 /tmp/vinput-last.*，便于排错。
 if [ "${VINPUT_DEBUG_KEEP:-0}" = "1" ]; then

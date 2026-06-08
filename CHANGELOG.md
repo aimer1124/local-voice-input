@@ -16,6 +16,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
   `-l zh`. **Always** runs the LLM (ignores `SHORT_TEXT_THRESHOLD`), otherwise a short Chinese phrase
   would come back unchanged in Chinese. Suggested hotkey `⌃⇧Space`. Deployed by both `install.sh` and
   `vinput setup`; adds a `--test-llm-clean-en` test hook.
+- **Long-audio ASR regression sample** (`tests/asr/07-zh-long`, 66s continuous Chinese that crosses
+  whisper's 30s window boundary). The suite previously topped out at a few-second utterances, so
+  long-form dictation quality had no guard. Baseline raw CER ≈ 0.117 (vs 0.00–0.025 for short
+  samples), driven by homophones and occasional window-boundary clause drops.
+- **Escape-hatch decode knobs** `WHISPER_ENTROPY_THOLD` / `WHISPER_MAX_CONTEXT` /
+  `WHISPER_CARRY_PROMPT` (blank defaults = no change to whisper.cpp defaults). For manual
+  experimentation only — measured to give no gain (and `--max-context` capping actively *hurts*);
+  rationale + data archived in `tests/asr/README.md` so the dead ends aren't re-explored.
+
+### Changed
+- **Deduped the whisper-cli invocation** into a single `build_whisper_args()` helper. The
+  `--test-transcribe` hook and the production path previously assembled the flag list twice and
+  relied on a "keep in sync" comment; new flags now have one source of truth. Behavior-neutral —
+  ASR suite CER unchanged for samples 01–06.
 
 See [ROADMAP.md](./ROADMAP.md) and [open issues](https://github.com/aimer1124/local-voice-input/issues) for what's planned next.
 

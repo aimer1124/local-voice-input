@@ -5,3 +5,4 @@
 04-zh-fast	Tingting	260	none	0.20	fast speech (260 wpm)
 05-zh-mixed-en	Tingting	180	none	0.25	zh+en mixed (React/useEffect/memory leak)
 06-silence	-	-	silence	1.00	pure silence — must yield empty result
+07-zh-long	Tingting	180	none	0.20	long continuous speech (>30s, crosses whisper window boundary)
