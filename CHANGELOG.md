@@ -6,6 +6,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.7.1] — 2026-06-08
+
+Reliability fix for a recording that could never stop.
+
+### Fixed
+- **Stuck `rec` process → permanent "已停止，转写中" on every trigger.** When the audio device
+  wedges, `rec` (SoX) can ignore `SIGINT`; the 30s hard-timeout guard only sent `SIGINT`, so a
+  wedged `rec` ran forever, `wait` blocked forever, and `/tmp/vinput.lock.d` was never released —
+  after which every hotkey press landed in the toggle-stop branch instead of starting a new
+  recording (observed in the wild: a `rec` stuck for two days, only `kill -9` cleared it). Two
+  defenses added in `bin/vinput_bg.sh`:
+  - **Guard escalation** — the hard-timeout guard now follows `SIGINT` with a `SIGKILL` 3s later,
+    so a wedged `rec` is always reaped at `MAX_REC_SECONDS + 3s` and the lock is released.
+  - **Stale-lock reclaim by age** — on toggle, a lock older than `MAX_REC_SECONDS + 60s` (well
+    beyond any healthy record-plus-transcribe cycle) is treated as a zombie and force-reclaimed
+    into a fresh recording, instead of being "stopped". Covers the case where the guard process
+    itself died (system sleep / parent killed → orphaned `rec`). The reclaim verifies the PID is
+    actually a `rec` process before killing, to avoid hitting a reused PID.
+
 ## [1.7.0] — 2026-06-08
 
 Headline: **EN mode** — speak Chinese, paste an English prompt — plus a long-audio quality guard.
