@@ -18,6 +18,10 @@ CONFIG_FILE="$HOME/.config/vinput.conf"
 MODEL_PATH="${MODEL_PATH:-$HOME/.whisper_models/ggml-large-v3-turbo-q5_0.bin}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:3b}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
+# LLM 整形调用(curl)的总超时秒数。ollama 卡死/正在重载模型时，超时即放弃整形，
+# 回退粘贴「原始转写」，避免整条流水线无限挂起（曾因 ollama 后端损坏卡死 >4 分钟，
+# 占住锁导致之后每次触发都误判「已停止」）。冷加载大模型慢的机器可调大。
+OLLAMA_TIMEOUT="${OLLAMA_TIMEOUT:-30}"
 WHISPER_LANG="${WHISPER_LANG:-zh}"
 WHISPER_THREADS="${WHISPER_THREADS:-8}"
 SHORT_TEXT_THRESHOLD="${SHORT_TEXT_THRESHOLD:-15}"
@@ -261,7 +265,9 @@ clean_with_llm() {
         --arg keep_alive "30m" \
         '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive}')
 
-    response_json=$(curl -s -X POST "$OLLAMA_URL/api/generate" \
+    # --max-time 兜底：ollama 卡死/重载时不会无限等待；超时→空响应→下方回退到原始转写。
+    response_json=$(curl -s --connect-timeout 5 --max-time "$OLLAMA_TIMEOUT" \
+        -X POST "$OLLAMA_URL/api/generate" \
         -H "Content-Type: application/json" \
         -d "$payload")
 
@@ -322,7 +328,9 @@ clean_with_llm_en() {
         --arg keep_alive "30m" \
         '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive}')
 
-    response_json=$(curl -s -X POST "$OLLAMA_URL/api/generate" \
+    # --max-time 兜底：ollama 卡死/重载时不会无限等待；超时→空响应→下方回退到原始转写。
+    response_json=$(curl -s --connect-timeout 5 --max-time "$OLLAMA_TIMEOUT" \
+        -X POST "$OLLAMA_URL/api/generate" \
         -H "Content-Type: application/json" \
         -d "$payload")
 

@@ -24,6 +24,7 @@ run_step() {
 }
 
 run_step "shell lint" bash "$ROOT/scripts/lint-shell.sh"
+run_step "doc coverage (config vars <-> docs)" bash "$ROOT/scripts/check-docs.sh"
 run_step "CLI integration" bash "$ROOT/tests/integration/run.sh"
 
 if [ "${RUN_LLM:-0}" = "1" ]; then

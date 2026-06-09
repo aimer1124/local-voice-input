@@ -37,6 +37,13 @@ pgrep -lf "vinput|rec -q|ollama"            # rec / Ollama / Whisper process tre
 ~/.whisper_models/hud "test message" 2      # standalone HUD test
 ```
 
+### Adding a config option
+
+Docs are hand-maintained, so when you add a `FOO="${FOO:-default}"` knob to `bin/vinput_bg.sh`,
+document it in a README (Configuration or Advanced Configuration) or in `config/vinput.conf.example`
+— otherwise `scripts/check-docs.sh` (run by `scripts/preflight.sh`) fails. Deliberately internal /
+debug-only vars go on that script's short `INTERNAL_ALLOWLIST` with a one-line reason.
+
 ## 📝 Commit style
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/):

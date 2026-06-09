@@ -6,6 +6,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.7.2] — 2026-06-09
+
+Reliability fix for the LLM-refinement step hanging forever.
+
+### Fixed
+- **LLM step could hang the whole pipeline if Ollama wedged.** The `clean_with_llm` /
+  `clean_with_llm_en` calls used `curl` with **no timeout**, so if Ollama stopped responding
+  (e.g. a broken Homebrew Ollama whose `llama-server` backend is missing — every inference
+  request then hangs), `curl` waited forever, the recording lock was never released, and the
+  result never reached the input box; subsequent hotkeys fell into the toggle-stop branch
+  ("已停止，转写中"). Added `--connect-timeout 5 --max-time "$OLLAMA_TIMEOUT"` to both calls.
+  The empty-response fallback already in place then pastes the **raw transcript** instead of
+  hanging — you still get your words, just unpolished.
+
+### Added
+- **`OLLAMA_TIMEOUT`** config option (default `30`s) — total timeout for the LLM-refinement
+  call. Raise it on machines where cold-loading the model is slow; lower it to fail over to the
+  raw transcript faster. Documented in `config/vinput.conf.example`, both READMEs (Configuration
+  + Troubleshooting).
+- **Doc-coverage guard** (`scripts/check-docs.sh`, wired into `scripts/preflight.sh`) — asserts
+  every user-configurable `FOO="${FOO:-…}"` knob in `vinput_bg.sh` is mentioned in a README or
+  the conf example (or is on a short, justified internal allowlist). Docs here are hand-written;
+  this catches the "added a knob, forgot to document it" drift. It immediately caught three
+  long-audio escape-hatch knobs (`WHISPER_ENTROPY_THOLD` / `WHISPER_MAX_CONTEXT` /
+  `WHISPER_CARRY_PROMPT`) that shipped in 1.7.0 undocumented — now in README Advanced Config.
+
 ## [1.7.1] — 2026-06-08
 
 Reliability fix for a recording that could never stop.

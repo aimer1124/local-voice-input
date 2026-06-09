@@ -278,6 +278,7 @@ WHISPER_LANG="zh"              # mixed CN/EN is guided by the hotword prompt
 # === Ollama LLM refinement ===
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
+OLLAMA_TIMEOUT=30              # LLM call timeout (s); on timeout, paste raw transcript instead of hanging. Raise on slow cold-loads
 SHORT_TEXT_THRESHOLD=15        # text shorter than this (CN: 1 char = 1) skips the LLM, saving 1–2s
 
 # === Recording / paste behavior ===
@@ -341,6 +342,13 @@ WHISPER_TEMPERATURE_INC=0.2   # temperature increment step, a sampling fallback 
 # WHISPER_TEMPERATURE=0       # starting temperature; blank = whisper.cpp default
 # WHISPER_NO_SPEECH_THOLD=0.6 # lower = stricter. ⚠️ v1.1.3's stricter value judged ordinary mics as "non-speech"; v1.1.6 reverted to default (blank)
 # WHISPER_LOGPROB_THOLD=-1.0  # closer to 0 = stricter. Same story; only consider it if doctor reports a weak signal
+
+# Long-audio decode escape hatches (blank = whisper.cpp default). ⚠️ Measured to give NO gain on
+# the long-audio sample — capping --max-context actively HURT. Manual experiments only; see the
+# negative-results table in tests/asr/README.md before touching these.
+# WHISPER_ENTROPY_THOLD=       # blank = whisper.cpp default (2.40)
+# WHISPER_MAX_CONTEXT=         # blank = whisper.cpp default (-1); setting small measured worse, not better
+# WHISPER_CARRY_PROMPT=0       # 1 = re-inject the prompt into every 30s window; measured no gain
 ```
 
 ### Dynamic prompt context
@@ -494,6 +502,7 @@ To inspect config and entrypoint structure without touching Ollama or the microp
 | Default input device | System Settings → Sound → Input (use MacBook Pro Microphone) |
 | Stuck recording | `pkill -f "rec -q"; rm -rf /tmp/vinput.lock.d` |
 | Ollama not running | `brew services start ollama` |
+| Result never pastes / hangs after speaking | The LLM step waits on Ollama. It now times out after `OLLAMA_TIMEOUT` (default 30s) and pastes the **raw transcript** instead of hanging. If you hit the timeout often, check Ollama with `ollama ps` / `ollama run qwen2.5:3b hi`; a broken Homebrew Ollama (missing `llama-server` backend) makes every request hang — pin a known-good version (`brew pin ollama`). Raise `OLLAMA_TIMEOUT` on slow machines. |
 | HUD not showing | `~/.whisper_models/hud "test" 2` |
 | Garbled Chinese | Confirm the script contains `export LANG="en_US.UTF-8"` |
 
