@@ -65,7 +65,7 @@ contains() {
 
 run_case "version" bash -c '
     out=$(HOME="$1" "$2" --version)
-    case "$out" in *"local-voice-input 1.7.1"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
+    case "$out" in *"local-voice-input 1.7.2"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
 ' _ "$TMP_HOME" "$VINPUT"
 
 run_case "help includes new commands" bash -c '

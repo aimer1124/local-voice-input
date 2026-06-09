@@ -277,6 +277,7 @@ WHISPER_LANG="zh"              # 中英混读靠热词 prompt 引导
 # === Ollama LLM 润色 ===
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
+OLLAMA_TIMEOUT=30              # LLM 调用超时（秒）；超时则粘贴原始转写而非无限挂起。冷加载慢的机器调大
 SHORT_TEXT_THRESHOLD=15        # 短于此字数（中文 1 字=1）跳过 LLM，省 1–2 秒
 
 # === 录音 / 粘贴行为 ===
@@ -341,6 +342,12 @@ WHISPER_TEMPERATURE_INC=0.2   # 温度递增步长，失败时温度采样兜底
 # WHISPER_TEMPERATURE=0       # 起始温度，留空=whisper.cpp 默认
 # WHISPER_NO_SPEECH_THOLD=0.6 # 越小越严。⚠️ v1.1.3 调严后普通麦全判"非语音"，v1.1.6 改回默认(留空)
 # WHISPER_LOGPROB_THOLD=-1.0  # 越接近 0 越严。同上，仅 doctor 显示信号偏弱时再考虑
+
+# 长音频解码逃生舱（留空=whisper.cpp 默认）。⚠️ 实测对长音频样本零增益，把 --max-context 调小反而更差。
+# 仅供手动实验；改前先看 tests/asr/README.md 里的负面结果表。
+# WHISPER_ENTROPY_THOLD=       # 留空 = whisper.cpp 默认 (2.40)
+# WHISPER_MAX_CONTEXT=         # 留空 = whisper.cpp 默认 (-1)；设小实测更差
+# WHISPER_CARRY_PROMPT=0       # 1 = 每个 30s 窗口都重注入 prompt；实测无增益
 ```
 
 ### 动态 Prompt 上下文
@@ -487,6 +494,7 @@ RUN_LLM=1 RUN_ASR=1 bash scripts/preflight.sh
 | 默认输入设备 | 系统设置 → 声音 → 输入（用 MacBook Pro Microphone） |
 | 卡死的录音 | `pkill -f "rec -q"; rm -rf /tmp/vinput.lock.d` |
 | Ollama 没启动 | `brew services start ollama` |
+| 说完后结果一直不粘贴 / 卡住 | LLM 这步在等 Ollama。现在会在 `OLLAMA_TIMEOUT`（默认 30s）后超时并改粘贴**原始转写**，不再无限挂起。若经常超时，用 `ollama ps` / `ollama run qwen2.5:3b hi` 查 Ollama；Homebrew 装的 Ollama 若后端损坏（缺 `llama-server`）会让每个请求都卡死——`brew pin ollama` 钉住一个能用的版本。慢机器可调大 `OLLAMA_TIMEOUT`。 |
 | HUD 不显示 | `~/.whisper_models/hud "测试" 2` |
 | 中文乱码 | 确认脚本含 `export LANG="en_US.UTF-8"` |
 
