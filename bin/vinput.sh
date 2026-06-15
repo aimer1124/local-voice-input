@@ -1,52 +1,55 @@
 #!/bin/bash
+# vinput.sh — 前台手动版（终端用：说完按 Ctrl+C 结束转录）。
+#
+# 与 Raycast 触发的 vinput_bg.sh 完全 parity：以「库模式」(VINPUT_LIB=1) source 后者，
+# 复用同一套函数（apply_corrections / 长度感知 clean_with_llm / guard_critical_tokens /
+# build_whisper_args）与同一套配置默认值，永不漂移。唯一区别是交互方式：
+# 前台录音 + Ctrl+C 停 + 结果打印到终端并复制到剪贴板。
+#
+# 历史教训：本文件曾内嵌一份**陈旧**的 LLM 提炼逻辑（老 prompt、无 temperature、无纠错表、
+# 无守卫、无长度感知），导致它与主路径质量脱节、还会语义反转。改为复用主路径后根治。
 
-# ============================================================
-# 加载用户配置（可选，文件不存在时使用默认值）
-# 用户可在 ~/.config/vinput.conf 中覆盖任意变量，例如：
-#   OLLAMA_MODEL="qwen2.5:1.5b"
-#   WHISPER_LANG="zh"
-#   SHORT_TEXT_THRESHOLD=20
-# ============================================================
-CONFIG_FILE="$HOME/.config/vinput.conf"
-[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-MODEL_PATH="${MODEL_PATH:-$HOME/.whisper_models/ggml-small.bin}"
-OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:3b}"
-OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
-WHISPER_LANG="${WHISPER_LANG:-zh}"
-WHISPER_THREADS="${WHISPER_THREADS:-8}"
-SHORT_TEXT_THRESHOLD="${SHORT_TEXT_THRESHOLD:-15}"
-HOTWORDS_FILE="${HOTWORDS_FILE:-$HOME/.config/vinput_hotwords.txt}"
+# 库模式 source：只拿函数 + 配置默认值，不跑录音主流程（见 vinput_bg.sh 末尾的 return 守卫）。
+# 末尾 "" 占位 $1，避免误命中 vinput_bg.sh 里的 --test-* 钩子。
+# shellcheck source=/dev/null
+VINPUT_LIB=1 source "$SELF_DIR/vinput_bg.sh" ""
 
-# 并发锁：mkdir 在 macOS 上比 flock 更可靠（flock 非默认安装）
+# 热词：库模式不加载主流程里的 HOTWORDS 组装，这里自行读取供 build_whisper_args 用。
+if [ -f "$HOTWORDS_FILE" ]; then
+    HOTWORDS=$(cat "$HOTWORDS_FILE")
+else
+    HOTWORDS="使用 Whisper 和 Ollama 做语音转写，用 qwen2.5 整形 prompt。常用工具 Raycast、Claude、Cursor、Codex、Git、GitHub。"
+fi
+
+# 并发锁（与主路径同一把锁，互斥）
 LOCK_DIR="/tmp/vinput.lock.d"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     echo "❌ 已有 vinput 任务正在运行，跳过本次"
     exit 0
 fi
-
-# 隔离临时文件，防并发互踩
 TMPDIR_RUN=$(mktemp -d -t vinput.XXXXXX)
 AUDIO_PATH="$TMPDIR_RUN/voice.wav"
 TXT_PATH="$TMPDIR_RUN/voice"
 trap 'rm -rf "$LOCK_DIR" "$TMPDIR_RUN"' EXIT
 
-# 加载热词：优先读外部文件，每行一个或逗号分隔
-if [ -f "$HOTWORDS_FILE" ]; then
-    HOTWORDS=$(tr '\n' ',' < "$HOTWORDS_FILE" | sed 's/,/, /g; s/, *$//')
+# SoX 录音预处理链（与 vinput_bg.sh 非 VAD 路径一致，streaming-safe）
+if [ "${USE_SOX_PREPROCESS:-1}" = "1" ]; then
+    SOX_TAIL=(channels 1 rate 16000)
+    [ -n "${SOX_HIGHPASS:-}" ] && SOX_TAIL+=(highpass "$SOX_HIGHPASS")
+    [ -n "${SOX_LOWPASS:-}" ]  && SOX_TAIL+=(lowpass "$SOX_LOWPASS")
+    [ -n "${SOX_GAIN_DB:-}" ]  && SOX_TAIL+=(gain "$SOX_GAIN_DB")
 else
-    HOTWORDS="API, const, function, Promise, Playwright, Claude, Codex, Git, URL, PostgreSQL"
+    SOX_TAIL=(channels 1 rate 16000 gain -3)
 fi
-WHISPER_PROMPT="这是一段程序员的日常对话，包含 $HOTWORDS 等代码术语和简体中文。请输出带标点的简体中文。"
 
 # Ctrl+C 优雅切断录音
-trap 'echo -e "\n🛑 录音结束，正在全力转录..."; break' SIGINT
-
-echo "🎙️  正在录音... 说完后请按下 [Ctrl + C] 结束并转录"
+trap 'echo -e "\n🛑 录音结束，正在转录..."; break' SIGINT
+echo "🎙️  正在录音... 说完后按 [Ctrl + C] 结束并转录"
 echo "------------------------------------------------"
-
 while true; do
-    rec -q -c 1 -r 48000 -b 16 "$AUDIO_PATH" channels 1 rate 16000 gain -3 2>/dev/null
+    rec -q -c 1 -r 48000 -b 16 "$AUDIO_PATH" "${SOX_TAIL[@]}" 2>/dev/null
     break
 done
 trap - SIGINT
@@ -56,59 +59,42 @@ if [ ! -f "$AUDIO_PATH" ] || [ ! -s "$AUDIO_PATH" ]; then
     exit 1
 fi
 
-echo "🤖 正在进行本地高精度文本转录..."
-whisper-cli -t "$WHISPER_THREADS" -m "$MODEL_PATH" -f "$AUDIO_PATH" \
-    -l "$WHISPER_LANG" \
-    --prompt "$WHISPER_PROMPT" \
-    -otxt -of "$TXT_PATH" -nt -np > /dev/null 2>&1
+echo "🤖 正在本地转录..."
+build_whisper_args "$AUDIO_PATH" "$TXT_PATH"
+whisper-cli "${WHISPER_ARGS[@]}" > /dev/null 2>&1
 
-# sed trim 替代 xargs：不会因引号/反斜杠丢字符
-RAW_RESULT=$(sed 's/^[[:space:]]*//; s/[[:space:]]*$//' "${TXT_PATH}.txt" 2>/dev/null)
-
+# UTF-8 救援（与主路径同处理）
+RAW_RESULT=$(LC_ALL=C sed 's/^[[:space:]]*//; s/[[:space:]]*$//' "${TXT_PATH}.txt" 2>/dev/null)
+if ! echo "$RAW_RESULT" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+    RAW_RESULT=$(echo "$RAW_RESULT" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null)
+fi
 if [ -z "$RAW_RESULT" ] || [ ${#RAW_RESULT} -le 2 ]; then
     echo "❌ 未识别到有效语音"
     exit 1
 fi
 
+# 谐音纠错（与主路径同一张表）
+RAW_RESULT=$(apply_corrections "$RAW_RESULT")
 echo "📝 原始输入: \"$RAW_RESULT\""
 
-# 短文本直接跳过 LLM，避免冷启动开销
-if [ ${#RAW_RESULT} -lt "$SHORT_TEXT_THRESHOLD" ]; then
+# 长度感知 LLM 整形（与主路径同逻辑：短文本跳过；否则 clean_with_llm 内部按 LONG_TEXT_THRESHOLD 选模板）
+RAW_CHARS=$(printf %s "$RAW_RESULT" | wc -m | tr -d ' ')
+if [ "$RAW_CHARS" -lt "$SHORT_TEXT_THRESHOLD" ]; then
     echo "⚡ 短文本，跳过 AI 润色"
     CLEANED_RESULT="$RAW_RESULT"
+    MODE="short"
 else
-    echo "🧠 正在进行 AI 意图重构与去噪..."
+    echo "🧠 AI 意图重构与去噪（temperature=0，忠实不臆测）..."
+    CLEANED_RESULT=$(clean_with_llm "$RAW_RESULT")
+    MODE="full"
+fi
 
-    LLM_PROMPT="你是一个高效率的程序员指令提炼器。请将下面这段口语碎碎念进行去噪。
-
-规则：
-1. 过滤所有语气词（呃、那个、啊）。
-2. 如果说话人中途自我纠正（例如'改成A...不对改成B'），请只保留最终修正后的正确书面意图。
-3. 将口语表达转化为书面、具有逻辑性的硬核 Prompt 格式，不要生成大段代码，只输出提炼后的中文Prompt指令请求。
-4. 严格禁止输出任何解释、寒暄，直接输出提炼后的最终文本。
-
-输入文本：$RAW_RESULT"
-
-    # 用 jq 安全构造 JSON，防止引号/换行/反斜杠注入；keep_alive 让模型常驻 30 分钟，下次零启动
-    PAYLOAD=$(jq -n \
-        --arg model "$OLLAMA_MODEL" \
-        --arg prompt "$LLM_PROMPT" \
-        --arg keep_alive "30m" \
-        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive}')
-
-    RESPONSE_JSON=$(curl -s -X POST "$OLLAMA_URL/api/generate" \
-        -H "Content-Type: application/json" \
-        -d "$PAYLOAD")
-
-    CLEANED_RESULT=$(echo "$RESPONSE_JSON" | jq -r '.response // empty' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-
-    if [ -z "$CLEANED_RESULT" ]; then
-        echo "⚠️  AI 润色失败，回退到原始识别"
-        CLEANED_RESULT="$RAW_RESULT"
-    fi
+# 关键 token 丢失守卫（与主路径同）：数字被静默吞掉 → 回退到纠错后的原文
+if ! guard_critical_tokens "$MODE" "$RAW_RESULT" "$CLEANED_RESULT"; then
+    CLEANED_RESULT="$RAW_RESULT"
+    echo "⚠️  润色疑似丢了数字，已回退到原文"
 fi
 
 echo "✨ 最终意图: \"$CLEANED_RESULT\""
-
 printf '%s' "$CLEANED_RESULT" | pbcopy
-echo "📋 已成功复制到剪贴板！"
+echo "📋 已复制到剪贴板！"

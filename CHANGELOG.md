@@ -6,6 +6,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.8.2] — 2026-06-15
+
+LLM faithfulness hardening, after a recording came back with the **opposite** meaning
+(the model invented a negation that wasn't spoken).
+
+### Fixed
+- **Reshape could invert meaning by inventing a negation.** On a garbled/ambiguous transcript,
+  qwen2.5:3b sometimes hallucinated a "不要…" that wasn't in the input — flipping intent (e.g.
+  "put the data into a CSV/Excel file and send it" → "send it directly, **don't** use CSV/Excel").
+  Two causes, both fixed: (1) the Ollama call set **no temperature**, so default sampling (~0.8) made
+  the same input flip run-to-run (measured 2/3 faithful, 1/3 inverted); now both `clean_with_llm` /
+  `clean_with_llm_en` run at **`temperature: 0`** (greedy, deterministic, faithful). (2) Added a hard
+  rule to all four prompts (zh/en × short/long): **never introduce a negation/condition not in the
+  source, never invert or guess meaning; keep the literal meaning when the input is garbled.**
+- **`bin/vinput.sh` (foreground/terminal version) brought to full parity with the main path.** It
+  had drifted badly — its own stale reshape prompt, no temperature, and none of the homophone
+  table / number guard / length-aware reshaping. It now sources `vinput_bg.sh` as a library
+  (`VINPUT_LIB=1`, which loads functions + config and skips the recording main flow) and reuses the
+  exact same pipeline, so the two paths can never diverge again.
+
+### Changed
+- LLM regression suite (`tests/llm/run.sh`) now defaults `MAX_TRIES=1`: with `temperature: 0` the
+  reshape is deterministic, so a single run is authoritative and a failure is a real regression
+  rather than a flake to retry away.
+
 ## [1.8.1] — 2026-06-15
 
 Data-driven retune of the two recording/LLM timers, based on a measurement pass over real
