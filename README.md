@@ -351,6 +351,17 @@ WHISPER_TEMPERATURE_INC=0.2   # temperature increment step, a sampling fallback 
 # WHISPER_CARRY_PROMPT=0       # 1 = re-inject the prompt into every 30s window; measured no gain
 ```
 
+### LLM intent reshaping (long content)
+
+```bash
+LONG_TEXT_THRESHOLD=80   # transcripts ≥ this many chars (CN: 1 char = 1) switch the LLM from
+                         # "distill into one instruction" to "tidy up + keep structure, don't summarize"
+```
+
+Short utterances go through the terse distiller as before. Once a transcript reaches `LONG_TEXT_THRESHOLD`, the LLM uses a structure-preserving prompt instead, so a multi-point ramble stays a multi-point list rather than being compressed into a single lossy sentence.
+
+After reshaping (for both normal and EN modes), a deterministic **critical-token guard** checks that the Arabic numbers — and, in CN mode, the negations (不/别/没…) — present in the transcript survived the LLM rewrite. If one was silently dropped (e.g. "don't delete the 5 buttons" → "delete the buttons"), it pastes the corrected **raw transcript** instead and the HUD warns. The guard is always on, never overrides a faithful rewrite, and needs no config.
+
 ### Dynamic prompt context
 
 Prepends the last N successful transcriptions to Whisper's `--prompt` to give the model "short-term memory". In practice, proper-noun hit rate is +20~40% when chatting about the same topic in a row.
@@ -552,6 +563,15 @@ Once you spot a mistake, add it to the correction table with one command:
 ```bash
 vinput add-correction "Claude Code" "克劳德 code"
 ```
+
+Or let the history mine candidates for you — high-frequency English words that keep showing up but aren't in your table yet, plus which existing rules actually earn their keep (and which never fire and can be pruned):
+
+```bash
+vinput corrections --suggest           # scan all history
+vinput corrections --suggest --tail 200  # only the last 200 entries
+```
+
+It only suggests; you review and confirm with `vinput add-correction`.
 
 > Privacy: the log stays local and never leaves the machine. To wipe it: `rm ~/.cache/vinput/history.jsonl`.
 

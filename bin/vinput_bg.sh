@@ -25,6 +25,9 @@ OLLAMA_TIMEOUT="${OLLAMA_TIMEOUT:-30}"
 WHISPER_LANG="${WHISPER_LANG:-zh}"
 WHISPER_THREADS="${WHISPER_THREADS:-8}"
 SHORT_TEXT_THRESHOLD="${SHORT_TEXT_THRESHOLD:-15}"
+# 长内容阈值（v1.8.0）：转写字数 ≥ 此值时，LLM 整形从「提炼成一句」切到「整理+保结构、
+# 不摘要、不丢内容」的长内容模板。介于 SHORT 与 LONG 之间走常规提炼。见 clean_with_llm。
+LONG_TEXT_THRESHOLD="${LONG_TEXT_THRESHOLD:-80}"
 AUTO_PASTE="${AUTO_PASTE:-1}"
 USE_VAD="${USE_VAD:-0}"
 SILENCE_TAIL="${SILENCE_TAIL:-1.5}"
@@ -227,8 +230,32 @@ append_history() {
 # ──────────────────────────────────────────────────────────────
 clean_with_llm() {
     local raw="$1"
-    local llm_prompt payload response_json cleaned
+    local llm_prompt payload response_json cleaned n
+    n=$(printf '%s' "$raw" | wc -m | tr -d ' ')
 
+    if [ "$n" -ge "$LONG_TEXT_THRESHOLD" ]; then
+    # 长内容模板（v1.8.0）：定位是「整理通顺 + 保结构」，不是「压缩成一句」。短内容的提炼器
+    # prompt 套到几十秒多点口述上会过度概括、揉平分点 —— 这里换成不摘要、不丢内容的整理器。
+    llm_prompt="你是一个口语 → 书面文本的整理器。下面是用户一段较长的口语口述，请整理成通顺、准确的书面文本。
+
+【硬规则】
+1. 删除语气词和无意义重复（嗯、那个、就是、我想说的是…），但**不要概括、不要摘要、不要删掉任何有信息量的内容** —— 长内容的目标是「整理通顺」，不是「压缩成一句」。
+2. 若说话人中途自我纠正（\"啊不对，应该是…\"），只保留最终意图，丢弃被纠正的部分。
+3. **绝对保留数字、否定词、专有名词**：'5个按钮' 不能变成 '几个按钮'；'不要硬编码' 不能变成 '硬编码'；'src/lib' 不能变成 'src 库'。
+4. **绝对不要生成代码块**：把口述转成自然语言指令/说明，不是代码。
+5. **保留并理顺结构**：口述里的分点（'第一…第二…' 或 '1.…2.…3.…'）原样保留为分点；多个主题用分句/换行分开，别揉成一坨。
+6. 严禁输出任何解释、寒暄、'以下是整理后的内容'之类的引导语。**只输出整理后的文本本身**。
+
+【示例】
+输入: 嗯我想说的是，首先呢把这个登录页面重构一下，那个，用 hooks 改写，然后第二个就是，加一个加载中的状态，对了还有，记得不要把 token 存到 localStorage 里，要放到 httpOnly 的 cookie
+输出: 1. 把登录页面重构，用 hooks 改写。
+2. 加一个加载中的状态。
+3. 不要把 token 存到 localStorage，放到 httpOnly 的 cookie。
+
+【现在轮到你】
+输入: ${raw}
+输出:"
+    else
     llm_prompt="你是一个口语 → 书面指令的提炼器。把下面用户的口语碎碎念清理成简洁、准确的书面指令。
 
 【硬规则】
@@ -258,6 +285,7 @@ clean_with_llm() {
 【现在轮到你】
 输入: ${raw}
 输出:"
+    fi
 
     payload=$(jq -n \
         --arg model "$OLLAMA_MODEL" \
@@ -290,8 +318,31 @@ clean_with_llm() {
 # ──────────────────────────────────────────────────────────────
 clean_with_llm_en() {
     local raw="$1"
-    local llm_prompt payload response_json cleaned
+    local llm_prompt payload response_json cleaned n
+    n=$(printf '%s' "$raw" | wc -m | tr -d ' ')
 
+    if [ "$n" -ge "$LONG_TEXT_THRESHOLD" ]; then
+    # 长内容模板（v1.8.0）：翻译 + 保结构，不摘要、不丢内容（与 clean_with_llm 对称）。
+    llm_prompt="你是一个「中文口语 → 英文书面文本」的翻译整理器。下面是用户一段较长的中文口语口述，请翻译并整理成通顺、准确的【英文】书面文本。
+
+【硬规则】
+1. 输出必须是英文。删除语气词和无意义重复（嗯、那个、就是…），但**不要概括、不要摘要、不要删掉任何有信息量的内容**。
+2. 若说话人中途自我纠正（\"啊不对，应该是…\"），只保留最终意图，丢弃被纠正的部分。
+3. **保留数字、否定词、专有名词/代码标识符**：'5个按钮' → '5 buttons'；'不要硬编码' → 'do not hardcode'（否定不能丢）；'src/lib'、'UserList'、'qwen2.5' 等标识符原样保留、不翻译。
+4. **绝对不要生成代码块**：把口述转成自然语言英文指令/说明，不是代码。
+5. **保留并理顺结构**：分点（'第一…第二…' → '1. … 2. … 3. …'）原样保留；多个主题分句/换行分开。
+6. 严禁输出任何解释、寒暄、'Here is…' 之类的引导语。**只输出整理后的英文文本本身**。
+
+【示例】
+输入: 嗯我想说的是，首先呢把这个登录页面重构一下，那个，用 hooks 改写，然后第二个就是，加一个加载中的状态，对了还有，记得不要把 token 存到 localStorage 里，要放到 httpOnly 的 cookie
+输出: 1. Refactor the login page, rewriting it with hooks.
+2. Add a loading state.
+3. Do not store the token in localStorage; put it in an httpOnly cookie.
+
+【现在轮到你】
+输入: ${raw}
+输出:"
+    else
     llm_prompt="你是一个「中文口语 → 英文书面指令」的提炼翻译器。把下面用户的中文口语碎碎念翻译并清理成简洁、准确的【英文】书面指令。
 
 【硬规则】
@@ -321,6 +372,7 @@ clean_with_llm_en() {
 【现在轮到你】
 输入: ${raw}
 输出:"
+    fi
 
     payload=$(jq -n \
         --arg model "$OLLAMA_MODEL" \
@@ -342,6 +394,63 @@ clean_with_llm_en() {
     else
         printf '%s' "$cleaned"
     fi
+}
+
+# ──────────────────────────────────────────────────────────────
+# 关键 token 丢失守卫（v1.8.0）— LLM 整形后、粘贴前的确定性兜底。
+#
+# clean_with_llm 的硬规则「绝对保留数字/否定词」只是对模型的请求；qwen2.5:3b 在长输入上
+# 会静默违反（吞掉「5 个」、丢掉「不要」），而现在没有任何防护。这里核对：raw（纠错后转写）
+# 里的阿拉伯数字、以及 (full 模式) 中文否定词，是否在 cleaned（LLM 输出）里仍然存在。
+# 任一丢失 → 返回 1，调用方回退到「纠错后的原文」并给 HUD 警告。
+#
+# 设计原则：宁漏勿误判 —— 误判会丢弃一次正确润色，比漏检更糟。因此：
+#   - 单字中文数字（五↔5）先归一再比，避免互转误判；多位中文数（二十五）不映射 → 保守放行。
+#   - en 模式跳过否定检查（中文否定译成英文 not/don't，逐字比会全部误判）。
+# byte-exact：用 LC_ALL=C 做匹配，UTF-8 整字的字节序列匹配是安全的（self-synchronizing）。
+# 用法: guard_critical_tokens <mode> <raw> <cleaned>；返回 0=ok，1=疑似丢失。
+# ──────────────────────────────────────────────────────────────
+guard_critical_tokens() {
+    local mode="$1" raw="$2" cleaned="$3"
+
+    # 仅 LLM 真正改写过的路径需要守卫；raw / short 模式 cleaned==raw，无需检查。
+    case "$mode" in
+        full|full-guard|en|en-guard) ;;
+        *) return 0 ;;
+    esac
+
+    # —— 数字守卫（full + en 都查，数字跨语言）——
+    # 保留义务只来自 raw 里的「阿拉伯数字」：纯中文数字（五 / 二十五）不产生义务（保守放行），
+    # 否则按单字映射会把「二十五」拆成 2 和 5 凭空造义务而误判。
+    # cleaned 侧做单字中文→阿拉伯归一，覆盖「raw 是 5、LLM 改写成五」这种合法互转。
+    local cn2ar='s/〇/0/g;s/零/0/g;s/一/1/g;s/二/2/g;s/两/2/g;s/三/3/g;s/四/4/g;s/五/5/g;s/六/6/g;s/七/7/g;s/八/8/g;s/九/9/g'
+    local cleaned_norm nums num
+    cleaned_norm=$(printf '%s' "$cleaned" | LC_ALL=C sed "$cn2ar")
+    nums=$(printf '%s' "$raw" | LC_ALL=C grep -oE '[0-9]+' || true)
+    if [ -n "$nums" ]; then
+        while IFS= read -r num; do
+            [ -z "$num" ] && continue
+            case "$cleaned_norm" in
+                *"$num"*) ;;       # 数字仍在 → ok
+                *) return 1 ;;     # 数字丢了
+            esac
+        done <<< "$nums"
+    fi
+
+    # —— 否定词守卫（仅 full 模式）——
+    # raw 含 ≥1 个中文否定字、cleaned 一个都没有 → 判丢失（否定被吞会反转语义）。
+    case "$mode" in
+        full|full-guard)
+            local neg_re='不|别|没|无|勿|莫|非|禁|拒'
+            if printf '%s' "$raw" | LC_ALL=C grep -qE "$neg_re"; then
+                if ! printf '%s' "$cleaned" | LC_ALL=C grep -qE "$neg_re"; then
+                    return 1
+                fi
+            fi
+            ;;
+    esac
+
+    return 0
 }
 
 hud() {
@@ -409,6 +518,16 @@ if [ "${1:-}" = "--test-llm-clean-en" ] && [ -n "${2:-}" ]; then
     # EN 模式测试钩子：直接喂中文文本，返回翻译整形后的英文输出。
     clean_with_llm_en "$2"
     echo
+    exit 0
+fi
+
+if [ "${1:-}" = "--test-guard" ] && [ -n "${2:-}" ]; then
+    # tests/integration 用：喂 <mode> <raw> <cleaned>，打印 ok|drop（确定性，无需 Ollama）。
+    if guard_critical_tokens "${2:-}" "${3:-}" "${4:-}"; then
+        echo "ok"
+    else
+        echo "drop"
+    fi
     exit 0
 fi
 
@@ -635,6 +754,15 @@ else
     CLEANED_RESULT=$(clean_with_llm "$RAW_RESULT")
 fi
 
+# 关键 token 丢失守卫（v1.8.0）：LLM 改写过的路径，核对数字/否定没被静默吞掉。
+# 命中 → 回退到「纠错后的原文」（完整、未丢内容），并置 HUD 警告态。详见 guard_critical_tokens。
+GUARD_TRIGGERED=0
+if ! guard_critical_tokens "$MODE" "$RAW_RESULT" "$CLEANED_RESULT"; then
+    CLEANED_RESULT="$RAW_RESULT"
+    GUARD_TRIGGERED=1
+    MODE="${MODE}-guard"
+fi
+
 printf '%s' "$CLEANED_RESULT" | pbcopy
 
 # 自动粘贴 + 辅助功能权限检测 (#8)。
@@ -691,7 +819,12 @@ if [ "$HUD_SHOW_RESULT" = "1" ] && [ -n "$CLEANED_RESULT" ]; then
         export HUD_ON_UP_CMD="$0"
     fi
 
-    hud "✓ ${HUD_TEXT}" "$HUD_FINAL_DURATION"
+    # 守卫触发时换成警告前缀：告知用户粘的是原文（润色疑似丢了数字/否定）。
+    if [ "${GUARD_TRIGGERED:-0}" = "1" ]; then
+        hud "⚠️ 润色疑丢数字/否定·已粘原文: ${HUD_TEXT}" "$HUD_FINAL_DURATION"
+    else
+        hud "✓ ${HUD_TEXT}" "$HUD_FINAL_DURATION"
+    fi
 else
     hud "✓ 已完成" 1.2
 fi

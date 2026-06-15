@@ -6,6 +6,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.8.0] — 2026-06-15
+
+Long-content transcription quality: the ASR layer is at its floor for long audio (see the
+negative-results table in `tests/asr/README.md`), so this release improves the **downstream**
+layers — LLM reshaping and the homophone table — exactly where the docs say the real headroom is.
+
+### Added
+- **Length-aware LLM reshaping.** `clean_with_llm` / `clean_with_llm_en` now switch to a
+  structure-preserving prompt once a transcript reaches `LONG_TEXT_THRESHOLD` (default `80`
+  chars). The terse "distill into one instruction" prompt was tuned on short commands and
+  over-compressed long multi-point dictation; the long prompt keeps lists/structure and is told
+  **not to summarize or drop content**. Short utterances are unchanged. New
+  **`LONG_TEXT_THRESHOLD`** config knob (README Advanced Config, both languages).
+- **Critical-token drop guard.** After LLM reshaping (normal + EN modes), a deterministic check
+  verifies that Arabic numbers — and, in CN mode, negations (不/别/没…) — present in the transcript
+  survived the rewrite. The 3B model's "preserve numbers/negations" rule is only a *request* and
+  it silently violates it on long input (e.g. "don't delete the 5 buttons" → "delete the
+  buttons"). On a detected drop the pipeline pastes the **corrected raw transcript** instead and
+  the HUD warns. Conservative by design (Chinese↔Arabic numeral swaps and pure multi-digit
+  Chinese numerals never false-trigger); always on, no config. New `--test-guard` hook +
+  deterministic cases in `tests/integration`.
+- **`vinput corrections --suggest`** — mines `history.jsonl` for correction-table candidates:
+  high-frequency English words not yet tracked, plus rule-usage health (which rules fire, which
+  never fire and can be pruned). Suggest-only; you confirm with `vinput add-correction`. A flag on
+  the existing `corrections` command, so the CLI surface count is unchanged.
+
+### Tested
+- New LLM regression case `07-long-structure` (long ramble → preserved 4-point list). Existing
+  ASR/LLM suites unchanged — no Whisper params were touched.
+
 ## [1.7.2] — 2026-06-09
 
 Reliability fix for the LLM-refinement step hanging forever.

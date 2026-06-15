@@ -350,6 +350,17 @@ WHISPER_TEMPERATURE_INC=0.2   # 温度递增步长，失败时温度采样兜底
 # WHISPER_CARRY_PROMPT=0       # 1 = 每个 30s 窗口都重注入 prompt；实测无增益
 ```
 
+### LLM 整形（长内容）
+
+```bash
+LONG_TEXT_THRESHOLD=80   # 转写字数 ≥ 此值（中文 1 字=1）时，LLM 从「提炼成一句」切到
+                         # 「整理+保结构、不摘要、不丢内容」的长内容模板
+```
+
+短句仍走原来的提炼器。一旦转写达到 `LONG_TEXT_THRESHOLD`，LLM 改用保结构的长内容模板——一段多点口述会保留成多点列表，而不是被压成一句、丢掉细节。
+
+整形之后（常规模式与 EN 模式都生效），一道确定性的**关键 token 丢失守卫**会核对：转写里的阿拉伯数字、以及（常规模式下）否定词（不/别/没…）是否在 LLM 输出里仍然存在。若被静默吞掉（例如「不要删那 5 个按钮」→「删那些按钮」），则改粘**纠错后的原始转写**并在 HUD 给警告。守卫始终开、绝不覆盖忠实的改写、无需配置。
+
 ### 动态 Prompt 上下文
 
 把最近 N 次成功转写拼到 Whisper `--prompt` 前，给模型「短期记忆」。实测连续聊同一话题时专有名词命中率 +20~40%。
@@ -544,6 +555,15 @@ vinput history --raw-only       # 只看原始 Whisper 输出（便于 grep 错�
 ```bash
 vinput add-correction "Claude Code" "克劳德 code"
 ```
+
+也可以让历史帮你挖候选——反复出现、却还没进纠错表的高频英文词，外加哪些已有规则常救场、哪些从未命中可剪枝：
+
+```bash
+vinput corrections --suggest            # 扫全部历史
+vinput corrections --suggest --tail 200 # 只看最近 200 条
+```
+
+只给建议，确认后再用 `vinput add-correction` 落库。
 
 > 隐私：日志只在本地，永不出机。要清空就 `rm ~/.cache/vinput/history.jsonl`。
 
