@@ -1,10 +1,14 @@
 #!/bin/bash
 
-LOG_FILE="/tmp/vinput_debug.log"
-if [ -f "$LOG_FILE" ] && [ "$(stat -f%z "$LOG_FILE" 2>/dev/null || echo 0)" -gt 1048576 ]; then
-    mv "$LOG_FILE" "$LOG_FILE.old"
+# 被当作函数库 source 时（VINPUT_LIB=1，见文件末尾的 return 守卫）跳过 stderr 重定向 ——
+# 否则会把 source 方（如前台版 vinput.sh）的报错也吞进调试日志、终端看不到。
+if [ "${VINPUT_LIB:-0}" != "1" ]; then
+    LOG_FILE="/tmp/vinput_debug.log"
+    if [ -f "$LOG_FILE" ] && [ "$(stat -f%z "$LOG_FILE" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+        mv "$LOG_FILE" "$LOG_FILE.old"
+    fi
+    exec 2>>"$LOG_FILE"
 fi
-exec 2>>"$LOG_FILE"
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
@@ -241,7 +245,7 @@ clean_with_llm() {
 【硬规则】
 1. 删除语气词和无意义重复（嗯、那个、就是、我想说的是…），但**不要概括、不要摘要、不要删掉任何有信息量的内容** —— 长内容的目标是「整理通顺」，不是「压缩成一句」。
 2. 若说话人中途自我纠正（\"啊不对，应该是…\"），只保留最终意图，丢弃被纠正的部分。
-3. **绝对保留数字、否定词、专有名词**：'5个按钮' 不能变成 '几个按钮'；'不要硬编码' 不能变成 '硬编码'；'src/lib' 不能变成 'src 库'。
+3. **绝对保留数字、否定词、专有名词**：'5个按钮' 不能变成 '几个按钮'；'不要硬编码' 不能变成 '硬编码'；'src/lib' 不能变成 'src 库'。**同样禁止新增原文没有的否定/转折/条件，禁止反转或臆测语义；输入残缺或语义不清时按字面意思保留、不要脑补。**
 4. **绝对不要生成代码块**：把口述转成自然语言指令/说明，不是代码。
 5. **保留并理顺结构**：口述里的分点（'第一…第二…' 或 '1.…2.…3.…'）原样保留为分点；多个主题用分句/换行分开，别揉成一坨。
 6. 严禁输出任何解释、寒暄、'以下是整理后的内容'之类的引导语。**只输出整理后的文本本身**。
@@ -261,7 +265,7 @@ clean_with_llm() {
 【硬规则】
 1. 删除语气词和无意义重复（嗯、那个、就是、我想说的是…）。
 2. 若说话人中途自我纠正（"啊不对，应该是…"），只保留最终意图，丢弃被纠正的部分。
-3. **绝对保留数字、否定词、专有名词**：'5个按钮' 不能变成 '几个按钮'；'不要硬编码' 不能变成 '硬编码'；'src/lib' 不能变成 'src 库'。
+3. **绝对保留数字、否定词、专有名词**：'5个按钮' 不能变成 '几个按钮'；'不要硬编码' 不能变成 '硬编码'；'src/lib' 不能变成 'src 库'。**同样禁止新增原文没有的否定/转折/条件，禁止反转或臆测语义；输入残缺或语义不清时按字面意思保留、不要脑补。**
 4. **绝对不要生成代码块**：用户说"写一个组件"——你输出的是\"写一个 React 组件 UserList 渲染 props 数组\"这样的指令，**不是** \`\`\`function UserList() {...} \`\`\`。
 5. 保留列表结构（'第一…第二…第三…' 或'1.…2.…3.…'）。
 6. 严禁输出任何解释、寒暄、'以下是清理后的指令'之类的引导语。**只输出最终文本本身**。
@@ -291,7 +295,7 @@ clean_with_llm() {
         --arg model "$OLLAMA_MODEL" \
         --arg prompt "$llm_prompt" \
         --arg keep_alive "30m" \
-        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive}')
+        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive, options:{temperature:0}}')
 
     # --max-time 兜底：ollama 卡死/重载时不会无限等待；超时→空响应→下方回退到原始转写。
     response_json=$(curl -s --connect-timeout 5 --max-time "$OLLAMA_TIMEOUT" \
@@ -328,7 +332,7 @@ clean_with_llm_en() {
 【硬规则】
 1. 输出必须是英文。删除语气词和无意义重复（嗯、那个、就是…），但**不要概括、不要摘要、不要删掉任何有信息量的内容**。
 2. 若说话人中途自我纠正（\"啊不对，应该是…\"），只保留最终意图，丢弃被纠正的部分。
-3. **保留数字、否定词、专有名词/代码标识符**：'5个按钮' → '5 buttons'；'不要硬编码' → 'do not hardcode'（否定不能丢）；'src/lib'、'UserList'、'qwen2.5' 等标识符原样保留、不翻译。
+3. **保留数字、否定词、专有名词/代码标识符**：'5个按钮' → '5 buttons'；'不要硬编码' → 'do not hardcode'（否定不能丢）；'src/lib'、'UserList'、'qwen2.5' 等标识符原样保留、不翻译。**同样禁止新增原文没有的否定/转折/条件、禁止反转或臆测语义；输入残缺时按字面意思保留、不要脑补。**
 4. **绝对不要生成代码块**：把口述转成自然语言英文指令/说明，不是代码。
 5. **保留并理顺结构**：分点（'第一…第二…' → '1. … 2. … 3. …'）原样保留；多个主题分句/换行分开。
 6. 严禁输出任何解释、寒暄、'Here is…' 之类的引导语。**只输出整理后的英文文本本身**。
@@ -348,7 +352,7 @@ clean_with_llm_en() {
 【硬规则】
 1. 输出必须是英文。删除语气词和无意义重复（嗯、那个、就是、我想说的是…）。
 2. 若说话人中途自我纠正（\"啊不对，应该是…\"），只保留最终意图，丢弃被纠正的部分。
-3. **保留数字、否定词、专有名词/代码标识符**：'5个按钮' → '5 buttons'；'不要硬编码' → 'do not hardcode'（否定不能丢）；'src/lib'、'UserList'、'qwen2.5' 等标识符原样保留、不翻译。
+3. **保留数字、否定词、专有名词/代码标识符**：'5个按钮' → '5 buttons'；'不要硬编码' → 'do not hardcode'（否定不能丢）；'src/lib'、'UserList'、'qwen2.5' 等标识符原样保留、不翻译。**同样禁止新增原文没有的否定/转折/条件、禁止反转或臆测语义；输入残缺时按字面意思保留、不要脑补。**
 4. **绝对不要生成代码块**：用户说\"写一个组件\"——你输出 \"Write a React component UserList that renders an array from props\"，**不是** \`\`\`function UserList() {...}\`\`\`。
 5. 保留列表结构（'第一…第二…第三…' → '1. … 2. … 3. …'）。
 6. 严禁输出任何解释、寒暄、'Here is…' 之类的引导语。**只输出最终英文文本本身**。
@@ -378,7 +382,7 @@ clean_with_llm_en() {
         --arg model "$OLLAMA_MODEL" \
         --arg prompt "$llm_prompt" \
         --arg keep_alive "30m" \
-        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive}')
+        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive, options:{temperature:0}}')
 
     # --max-time 兜底：ollama 卡死/重载时不会无限等待；超时→空响应→下方回退到原始转写。
     response_json=$(curl -s --connect-timeout 5 --max-time "$OLLAMA_TIMEOUT" \
@@ -547,6 +551,14 @@ if [ "${1:-}" = "--test-transcribe" ] && [ -n "${2:-}" ]; then
     printf '%s\n' "$RAW_RESULT"
     exit 0
 fi
+
+# ──────────────────────────────────────────────────────────────
+# 库模式守卫：前台版 vinput.sh 用 `VINPUT_LIB=1 source vinput_bg.sh ""` 复用上面的全部函数
+# （apply_corrections / clean_with_llm / clean_with_llm_en / guard_critical_tokens /
+# build_whisper_args …）+ 同一套配置默认值，从而与主路径完全 parity、永不漂移。
+# 此处 return 让 source 方只拿到「函数 + 配置」，不会跑下面的录音/锁/粘贴主流程。
+# 正常被 Raycast 执行时 VINPUT_LIB 未设 → 守卫为假 → 主流程照常（行为零变化）。
+[ "${VINPUT_LIB:-0}" = "1" ] && return 0 2>/dev/null
 
 LOCK_DIR="/tmp/vinput.lock.d"
 REC_PID_FILE="$LOCK_DIR/rec.pid"

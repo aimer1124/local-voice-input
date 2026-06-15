@@ -56,10 +56,10 @@ check_case() {
     LAST_FAILS="${fails[*]-}"
 }
 
-# LLMs are stochastic. Retry up to MAX_TRIES before declaring fail —
-# the suite's value is catching systematic regressions, not single-run
-# flakes. Override with VINPUT_LLM_MAX_TRIES=1 for strict mode.
-MAX_TRIES="${VINPUT_LLM_MAX_TRIES:-3}"
+# Since v1.8.1 the reshape runs at temperature=0 (greedy/deterministic), so a
+# single try is authoritative and a failure is a real regression — not a flake to
+# retry away. Default to 1; bump VINPUT_LLM_MAX_TRIES if you ever run at temp>0.
+MAX_TRIES="${VINPUT_LLM_MAX_TRIES:-1}"
 
 for input_file in "$CASES"/*.input.txt; do
     [ -f "$input_file" ] || continue
