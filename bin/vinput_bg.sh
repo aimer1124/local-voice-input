@@ -21,7 +21,7 @@ OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 # LLM 整形调用(curl)的总超时秒数。ollama 卡死/正在重载模型时，超时即放弃整形，
 # 回退粘贴「原始转写」，避免整条流水线无限挂起（曾因 ollama 后端损坏卡死 >4 分钟，
 # 占住锁导致之后每次触发都误判「已停止」）。冷加载大模型慢的机器可调大。
-OLLAMA_TIMEOUT="${OLLAMA_TIMEOUT:-30}"
+OLLAMA_TIMEOUT="${OLLAMA_TIMEOUT:-15}"
 WHISPER_LANG="${WHISPER_LANG:-zh}"
 WHISPER_THREADS="${WHISPER_THREADS:-8}"
 SHORT_TEXT_THRESHOLD="${SHORT_TEXT_THRESHOLD:-15}"
@@ -33,7 +33,7 @@ USE_VAD="${USE_VAD:-0}"
 SILENCE_TAIL="${SILENCE_TAIL:-1.5}"
 SILENCE_START_THRESHOLD="${SILENCE_START_THRESHOLD:-0.5%}"
 SILENCE_STOP_THRESHOLD="${SILENCE_STOP_THRESHOLD:-6%}"
-MAX_REC_SECONDS="${MAX_REC_SECONDS:-30}"
+MAX_REC_SECONDS="${MAX_REC_SECONDS:-45}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$HOME/.config/vinput_hotwords.txt}"
 CORRECTIONS_FILE="${CORRECTIONS_FILE:-$HOME/.config/vinput_corrections.tsv}"
 HISTORY_FILE="${HISTORY_FILE:-$HOME/.cache/vinput/history.jsonl}"
@@ -397,16 +397,18 @@ clean_with_llm_en() {
 }
 
 # ──────────────────────────────────────────────────────────────
-# 关键 token 丢失守卫（v1.8.0）— LLM 整形后、粘贴前的确定性兜底。
+# 关键 token 丢失守卫（v1.8.0，v1.8.1 收窄为「仅数字」）— LLM 整形后、粘贴前的确定性兜底。
 #
-# clean_with_llm 的硬规则「绝对保留数字/否定词」只是对模型的请求；qwen2.5:3b 在长输入上
-# 会静默违反（吞掉「5 个」、丢掉「不要」），而现在没有任何防护。这里核对：raw（纠错后转写）
-# 里的阿拉伯数字、以及 (full 模式) 中文否定词，是否在 cleaned（LLM 输出）里仍然存在。
-# 任一丢失 → 返回 1，调用方回退到「纠错后的原文」并给 HUD 警告。
+# clean_with_llm 的硬规则「保留数字」只是对模型的请求；qwen2.5:3b 在长输入上会静默吞掉数字
+# （「5 个」→「几个」）。这里核对 raw（纠错后转写）里的阿拉伯数字是否仍在 cleaned 里；丢失 →
+# 返回 1，调用方回退到「纠错后的原文」并给 HUD 警告。
 #
-# 设计原则：宁漏勿误判 —— 误判会丢弃一次正确润色，比漏检更糟。因此：
-#   - 单字中文数字（五↔5）先归一再比，避免互转误判；多位中文数（二十五）不映射 → 保守放行。
-#   - en 模式跳过否定检查（中文否定译成英文 not/don't，逐字比会全部误判）。
+# ⚠️ v1.8.1 移除了「否定词守卫」：它对口语中文误判率太高 —— 看不懂 / 能不能 / 是不是 / 差不多
+# 里的 不/没 被 LLM 合法删掉时也会触发，导致整句回退到没标点、没润色的原文。中文否定靠子串匹配
+# 无法可靠区分语义否定与口语助词，故只保留高价值、低误判的数字守卫。否定保留交回 LLM prompt 硬规则。
+#
+# 设计原则：宁漏勿误判。保留义务只来自 raw 的阿拉伯数字（纯中文数字「五/二十五」不产生义务）；
+# cleaned 侧做单字中文→阿拉伯归一，覆盖「raw 是 5、LLM 改写成五」的合法互转。
 # byte-exact：用 LC_ALL=C 做匹配，UTF-8 整字的字节序列匹配是安全的（self-synchronizing）。
 # 用法: guard_critical_tokens <mode> <raw> <cleaned>；返回 0=ok，1=疑似丢失。
 # ──────────────────────────────────────────────────────────────
@@ -436,19 +438,6 @@ guard_critical_tokens() {
             esac
         done <<< "$nums"
     fi
-
-    # —— 否定词守卫（仅 full 模式）——
-    # raw 含 ≥1 个中文否定字、cleaned 一个都没有 → 判丢失（否定被吞会反转语义）。
-    case "$mode" in
-        full|full-guard)
-            local neg_re='不|别|没|无|勿|莫|非|禁|拒'
-            if printf '%s' "$raw" | LC_ALL=C grep -qE "$neg_re"; then
-                if ! printf '%s' "$cleaned" | LC_ALL=C grep -qE "$neg_re"; then
-                    return 1
-                fi
-            fi
-            ;;
-    esac
 
     return 0
 }
@@ -598,8 +587,25 @@ if [ "$MODE" = "toggle" ]; then
             MODE="record"
         fi
     else
-        hud "⏳ 正在处理上次录音" 2
-        exit 0
+        # 无 rec.pid = 上一条正处于「转写/整形/粘贴」阶段（rec 已结束、pid 文件已删）。
+        # 正常情况稍等即可。但若那一轮在此阶段被硬杀（SIGKILL/断电/休眠），EXIT trap 来不及
+        # 清锁 → 锁被孤儿化、且这里没有 rec.pid 可回收 → 以前会每次都卡在「正在处理」永不自愈，
+        # 只能手动 rm -rf /tmp/vinput.lock.d。这里用锁年龄兜底：一次健康全流程（录音
+        # ≤MAX_REC_SECONDS + 转写 + 整形≤OLLAMA_TIMEOUT + 粘贴）远低于 STALE_CEILING；
+        # 超过即判孤儿锁，回收并直接开始新录音。
+        LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || date +%s) ))
+        STALE_CEILING=$(( MAX_REC_SECONDS + 60 ))
+        if [ "$LOCK_AGE" -le "$STALE_CEILING" ]; then
+            hud "⏳ 正在处理上次录音" 2
+            exit 0
+        fi
+        # 孤儿锁：强制回收 + 重建 → 落到下面的录音模式
+        rm -rf "$LOCK_DIR"
+        if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+            hud "❌ 锁冲突，请重试" 2
+            exit 1
+        fi
+        MODE="record"
     fi
 fi
 
@@ -754,7 +760,7 @@ else
     CLEANED_RESULT=$(clean_with_llm "$RAW_RESULT")
 fi
 
-# 关键 token 丢失守卫（v1.8.0）：LLM 改写过的路径，核对数字/否定没被静默吞掉。
+# 关键 token 丢失守卫（v1.8.0，v1.8.1 收窄为仅数字）：LLM 改写过的路径，核对数字没被静默吞掉。
 # 命中 → 回退到「纠错后的原文」（完整、未丢内容），并置 HUD 警告态。详见 guard_critical_tokens。
 GUARD_TRIGGERED=0
 if ! guard_critical_tokens "$MODE" "$RAW_RESULT" "$CLEANED_RESULT"; then
@@ -779,6 +785,45 @@ if [ "$AUTO_PASTE" = "1" ]; then
     fi
 fi
 
+# ── HUD 终态（#23）：先显示结果、释放锁，再做不占锁的记账 ──────────────
+# 顺序很重要：HUD 在释放锁之前调用，确保「这一轮的终态」先于「下一轮的录音中」显示，
+# 不会被本进程后续的 hud 调用反向覆盖。
+HUD_SHOW_RESULT="${HUD_SHOW_RESULT:-1}"
+HUD_FINAL_DURATION="${HUD_FINAL_DURATION:-2.5}"
+if [ "$AX_DENIED" = "1" ]; then
+    # 辅助功能权限缺失 (#8)：文本已在剪贴板、只是没能自动 ⌘V。首次顺手打开「隐私 → 辅助功能」面板。
+    open_settings_pane accessibility \
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    hud "📋 已复制到剪贴板 · 自动粘贴需在「设置 → 隐私 → 辅助功能」勾选 Raycast，先按 ⌘V 用着" 6
+elif [ "$HUD_SHOW_RESULT" = "1" ] && [ -n "$CLEANED_RESULT" ]; then
+    # 按字符截断（中文 1 字 = 1），不按字节。LC_ALL 让 cut/wc 按 UTF-8 计数。
+    HUD_TEXT=$(printf '%s' "$CLEANED_RESULT" | LC_ALL=en_US.UTF-8 cut -c1-60)
+    CLEAN_CHARS=$(printf '%s' "$CLEANED_RESULT" | LC_ALL=en_US.UTF-8 wc -m | tr -d ' ')
+    [ "$CLEAN_CHARS" -gt 60 ] && HUD_TEXT="${HUD_TEXT}…"
+
+    # ↑ 重录 (#23)：HUD_RERUN_ON_UP=1 时把当前脚本路径喂给 hud，按 ↑ 重跑整条流水线。
+    HUD_RERUN_ON_UP="${HUD_RERUN_ON_UP:-0}"
+    if [ "$HUD_RERUN_ON_UP" = "1" ]; then
+        export HUD_ON_UP_CMD="$0"
+    fi
+
+    # 守卫触发时换成警告前缀：告知用户粘的是原文（润色疑似丢了数字）。
+    if [ "${GUARD_TRIGGERED:-0}" = "1" ]; then
+        hud "⚠️ 润色疑丢数字·已粘原文: ${HUD_TEXT}" "$HUD_FINAL_DURATION"
+    else
+        hud "✓ ${HUD_TEXT}" "$HUD_FINAL_DURATION"
+    fi
+else
+    hud "✓ 已完成" 1.2
+fi
+
+# ── 提前释放录音锁（v1.8.1）──────────────────────────────────────
+# 终态已显示、文本已粘贴 —— 用户此刻就能再次录音，不必等下面的 recent/history 记账。
+# 以前锁在脚本退出（记账之后）才释放，紧接着按快捷键会撞「⏳ 正在处理上次录音」。
+# 手动释放后 re-arm EXIT trap：退出时只清自己的 tmpdir，绝不误删「新一轮录音」刚建的锁。
+rm -rf "$LOCK_DIR"
+trap 'rm -rf "$TMPDIR_RUN"' EXIT
+
 # 写入最近转写缓冲（v1.1.4 #17）— 下次启动时拼为 Whisper prompt 上下文。
 # 用 RAW_RESULT（未经 LLM 改写）作 ASR 记忆，避免 LLM 风格污染上下文。
 if [ "$USE_RECENT_PROMPT" = "1" ] && [ -n "$RAW_RESULT" ]; then
@@ -793,38 +838,3 @@ fi
 
 # 历史日志（#19）— 不影响主流程，失败也不报错
 append_history "$RAW_PRE_CORRECTIONS" "$RAW_RESULT" "$CLEANED_RESULT" "$MODE" "$AUDIO_PATH" 2>/dev/null || true
-
-# 辅助功能权限缺失 (#8)：文本已在剪贴板，只是没能自动 ⌘V。给可操作引导而不是假装成功，
-# 并在第一次遇到时顺手打开「隐私 → 辅助功能」面板（之后不再打扰）。
-if [ "$AX_DENIED" = "1" ]; then
-    open_settings_pane accessibility \
-        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-    hud "📋 已复制到剪贴板 · 自动粘贴需在「设置 → 隐私 → 辅助功能」勾选 Raycast，先按 ⌘V 用着" 6
-    exit 0
-fi
-
-# HUD 最终态（#23）— 显示真正粘贴的内容（截断 60 字），给用户视觉确认
-HUD_SHOW_RESULT="${HUD_SHOW_RESULT:-1}"
-HUD_FINAL_DURATION="${HUD_FINAL_DURATION:-2.5}"
-if [ "$HUD_SHOW_RESULT" = "1" ] && [ -n "$CLEANED_RESULT" ]; then
-    # 按字符截断（中文 1 字 = 1），不按字节。LC_ALL 让 cut/wc 按 UTF-8 计数。
-    HUD_TEXT=$(printf '%s' "$CLEANED_RESULT" | LC_ALL=en_US.UTF-8 cut -c1-60)
-    CLEAN_CHARS=$(printf '%s' "$CLEANED_RESULT" | LC_ALL=en_US.UTF-8 wc -m | tr -d ' ')
-    [ "$CLEAN_CHARS" -gt 60 ] && HUD_TEXT="${HUD_TEXT}…"
-
-    # ↑ 重录 (#23)：HUD_RERUN_ON_UP=1 时把当前脚本路径喂给 hud，HUD 在用户按 ↑ 时
-    # 重新启动一次完整流水线。第一次启用需要在系统设置里把 hud 二进制加进输入监控。
-    HUD_RERUN_ON_UP="${HUD_RERUN_ON_UP:-0}"
-    if [ "$HUD_RERUN_ON_UP" = "1" ]; then
-        export HUD_ON_UP_CMD="$0"
-    fi
-
-    # 守卫触发时换成警告前缀：告知用户粘的是原文（润色疑似丢了数字/否定）。
-    if [ "${GUARD_TRIGGERED:-0}" = "1" ]; then
-        hud "⚠️ 润色疑丢数字/否定·已粘原文: ${HUD_TEXT}" "$HUD_FINAL_DURATION"
-    else
-        hud "✓ ${HUD_TEXT}" "$HUD_FINAL_DURATION"
-    fi
-else
-    hud "✓ 已完成" 1.2
-fi

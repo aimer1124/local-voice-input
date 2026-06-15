@@ -95,7 +95,7 @@ Press ⌘⇧Space again          ← Tink sound
 │   │ rec   │    │ -cli     │    │ qwen   │    │ ⌘V       │  │
 │   └───┬───┘    └──────────┘    └────────┘    └──────────┘  │
 │       │                                                      │
-│       │       30s guard process (hard-timeout safety net)    │
+│       │       45s guard process (hard-timeout safety net)    │
 │       │                                                      │
 │   ┌───▼───┐                                                  │
 │   │  HUD  │ ← switches the screen-center overlay per stage  │
@@ -123,7 +123,7 @@ Press ⌘⇧Space again          ← Tink sound
 **Default USE_VAD=0 (recommended)**:
 - `rec` starts capturing the instant you press, regardless of volume
 - A second press sends SIGINT for an immediate stop
-- 30s hard timeout as a safety net in case you forget to stop
+- 45s hard timeout as a safety net in case you forget to stop
 
 **Optional USE_VAD=1**:
 - Adds a SoX silence filter: auto-stops after 1.5s of silence
@@ -278,13 +278,13 @@ WHISPER_LANG="zh"              # mixed CN/EN is guided by the hotword prompt
 # === Ollama LLM refinement ===
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
-OLLAMA_TIMEOUT=30              # LLM call timeout (s); on timeout, paste raw transcript instead of hanging. Raise on slow cold-loads
+OLLAMA_TIMEOUT=15              # LLM call timeout (s); on timeout, paste raw transcript instead of hanging. Raise on slow cold-loads
 SHORT_TEXT_THRESHOLD=15        # text shorter than this (CN: 1 char = 1) skips the LLM, saving 1–2s
 
 # === Recording / paste behavior ===
 AUTO_PASTE=1                   # 1 = auto ⌘V (needs Accessibility), 0 = copy only
 USE_VAD=0                      # 0 = pure toggle (recommended), 1 = auto-stop on silence (quiet rooms only)
-MAX_REC_SECONDS=30             # recording hard timeout (seconds)
+MAX_REC_SECONDS=45             # recording hard timeout (seconds)
 SOX_GAIN_DB=-3                 # too quiet / far from mic? raise to +6~+12 (negative = attenuate)
 
 # === Hotword list (optional) ===
@@ -360,7 +360,7 @@ LONG_TEXT_THRESHOLD=80   # transcripts ≥ this many chars (CN: 1 char = 1) swit
 
 Short utterances go through the terse distiller as before. Once a transcript reaches `LONG_TEXT_THRESHOLD`, the LLM uses a structure-preserving prompt instead, so a multi-point ramble stays a multi-point list rather than being compressed into a single lossy sentence.
 
-After reshaping (for both normal and EN modes), a deterministic **critical-token guard** checks that the Arabic numbers — and, in CN mode, the negations (不/别/没…) — present in the transcript survived the LLM rewrite. If one was silently dropped (e.g. "don't delete the 5 buttons" → "delete the buttons"), it pastes the corrected **raw transcript** instead and the HUD warns. The guard is always on, never overrides a faithful rewrite, and needs no config.
+After reshaping (for both normal and EN modes), a deterministic **critical-token guard** checks that the Arabic numbers present in the transcript survived the LLM rewrite (e.g. "remove the 5 buttons" must not become "remove the buttons"). If a number was silently dropped, it pastes the corrected **raw transcript** instead and the HUD warns. The guard is always on, never overrides a faithful rewrite, and needs no config. (A negation guard shipped in 1.8.0 but was removed in 1.8.1: conversational Chinese — 看不懂 / 能不能 / 是不是 — false-fired constantly, falling back to raw and losing punctuation/polish. Negation preservation is left to the LLM prompt's hard rules.)
 
 ### Dynamic prompt context
 
@@ -513,7 +513,7 @@ To inspect config and entrypoint structure without touching Ollama or the microp
 | Default input device | System Settings → Sound → Input (use MacBook Pro Microphone) |
 | Stuck recording | `pkill -f "rec -q"; rm -rf /tmp/vinput.lock.d` |
 | Ollama not running | `brew services start ollama` |
-| Result never pastes / hangs after speaking | The LLM step waits on Ollama. It now times out after `OLLAMA_TIMEOUT` (default 30s) and pastes the **raw transcript** instead of hanging. If you hit the timeout often, check Ollama with `ollama ps` / `ollama run qwen2.5:3b hi`; a broken Homebrew Ollama (missing `llama-server` backend) makes every request hang — pin a known-good version (`brew pin ollama`). Raise `OLLAMA_TIMEOUT` on slow machines. |
+| Result never pastes / hangs after speaking | The LLM step waits on Ollama. It now times out after `OLLAMA_TIMEOUT` (default 15s) and pastes the **raw transcript** instead of hanging. If you hit the timeout often, check Ollama with `ollama ps` / `ollama run qwen2.5:3b hi`; a broken Homebrew Ollama (missing `llama-server` backend) makes every request hang — pin a known-good version (`brew pin ollama`). Raise `OLLAMA_TIMEOUT` on slow machines. |
 | HUD not showing | `~/.whisper_models/hud "test" 2` |
 | Garbled Chinese | Confirm the script contains `export LANG="en_US.UTF-8"` |
 

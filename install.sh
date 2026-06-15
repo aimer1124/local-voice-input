@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.8.0"
+VERSION="1.8.1"
 GITHUB_REPO="aimer1124/local-voice-input"
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -73,6 +73,22 @@ run() {
     else
         "$@"
     fi
+}
+
+# install_atomic <src> <dst>：原子部署可执行脚本/二进制。
+# 先 cp 到同目录临时文件、chmod +x，再 mv 改名（同盘 rename 原子）。
+# ⚠️ 为什么不能直接 cp 覆盖：bash 是按字节偏移边读边执行脚本，若升级时正好有一轮 vinput_bg.sh
+# 在跑，cp 原地改写会让运行中的进程从新文件错误偏移读到半个 token 而崩溃（v1.8.1 实测：
+# "syntax error near unexpected token 'fi'"，那一轮卡在"转写中"）。mv 让运行中的进程继续持有
+# 旧 inode、完全不受影响，新内容只对下一次调用生效。
+install_atomic() {
+    local src="$1" dst="$2"
+    if [ "$DRY_RUN" = "1" ]; then
+        echo -e "${CYAN}[dry-run]${NC} 将原子部署: $src → $dst"
+        return 0
+    fi
+    local tmp="${dst}.tmp.$$"
+    cp "$src" "$tmp" && chmod +x "$tmp" && mv -f "$tmp" "$dst"
 }
 
 MODE_DESC="全量安装"
@@ -180,7 +196,12 @@ step "6/8 准备屏幕中央 HUD"
 run mkdir -p "$WHISPER_DIR"
 HUD_PATH="$WHISPER_DIR/hud"
 if command -v swiftc &> /dev/null; then
-    run swiftc -O "$REPO_DIR/src/hud.swift" -o "$HUD_PATH"
+    if [ "$DRY_RUN" = "1" ]; then
+        echo -e "${CYAN}[dry-run]${NC} 将编译 HUD: ${REPO_DIR}/src/hud.swift → ${HUD_PATH}（原子替换）"
+    else
+        # 编译到临时文件再 mv（原子）：避免覆盖正在运行的 hud 二进制时报 "text file busy"
+        swiftc -O "$REPO_DIR/src/hud.swift" -o "${HUD_PATH}.tmp.$$" && mv -f "${HUD_PATH}.tmp.$$" "$HUD_PATH"
+    fi
     ok "HUD 从源码编译完成"
 elif [ "$DRY_RUN" = "1" ]; then
     echo -e "${CYAN}[dry-run]${NC} 无 swiftc，将下载预编译 HUD ← $HUD_RELEASE_URL"
@@ -203,10 +224,10 @@ fi
 # ── 7. 部署脚本 ──────────────────────────────────────
 step "7/8 部署脚本与配置"
 
-run cp "$REPO_DIR/bin/vinput.sh" "$WHISPER_DIR/vinput.sh"
-run cp "$REPO_DIR/bin/vinput_bg.sh" "$WHISPER_DIR/vinput_bg.sh"
-run cp "$REPO_DIR/bin/vinput" "$WHISPER_DIR/vinput"
-run chmod +x "$WHISPER_DIR/vinput.sh" "$WHISPER_DIR/vinput_bg.sh" "$WHISPER_DIR/vinput"
+# 原子部署（v1.8.1）：用 mv 改名而非原地 cp，避免覆盖正在运行的 vinput_bg.sh 把那一轮读崩。
+install_atomic "$REPO_DIR/bin/vinput.sh" "$WHISPER_DIR/vinput.sh"
+install_atomic "$REPO_DIR/bin/vinput_bg.sh" "$WHISPER_DIR/vinput_bg.sh"
+install_atomic "$REPO_DIR/bin/vinput" "$WHISPER_DIR/vinput"
 ok "vinput.sh / vinput_bg.sh / vinput 部署完成"
 
 run mkdir -p "$CONFIG_DIR"

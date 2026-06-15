@@ -95,7 +95,7 @@
 │   │ rec   │    │ -cli     │    │ qwen   │    │ ⌘V       │  │
 │   └───┬───┘    └──────────┘    └────────┘    └──────────┘  │
 │       │                                                      │
-│       │       30s 守护进程 (硬超时保底)                       │
+│       │       45s 守护进程 (硬超时保底)                       │
 │       │                                                      │
 │   ┌───▼───┐                                                  │
 │   │  HUD  │ ← 每个阶段切换屏幕中央提示                       │
@@ -123,7 +123,7 @@
 **默认 USE_VAD=0（推荐）**：
 - `rec` 按下立即开始录音，不管音量
 - 二次按键发 SIGINT 立即停
-- 30s 硬超时兜底，防忘按停
+- 45s 硬超时兜底，防忘按停
 
 **可选 USE_VAD=1**：
 - 加 SoX silence 滤波：1.5s 静音自动停
@@ -277,13 +277,13 @@ WHISPER_LANG="zh"              # 中英混读靠热词 prompt 引导
 # === Ollama LLM 润色 ===
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
-OLLAMA_TIMEOUT=30              # LLM 调用超时（秒）；超时则粘贴原始转写而非无限挂起。冷加载慢的机器调大
+OLLAMA_TIMEOUT=15              # LLM 调用超时（秒）；超时则粘贴原始转写而非无限挂起。冷加载慢的机器调大
 SHORT_TEXT_THRESHOLD=15        # 短于此字数（中文 1 字=1）跳过 LLM，省 1–2 秒
 
 # === 录音 / 粘贴行为 ===
 AUTO_PASTE=1                   # 1=自动 ⌘V（需辅助功能权限），0=只复制
 USE_VAD=0                      # 0=纯 toggle（推荐），1=静音自动停（仅安静环境）
-MAX_REC_SECONDS=30             # 录音硬超时（秒）
+MAX_REC_SECONDS=45             # 录音硬超时（秒）
 SOX_GAIN_DB=-3                 # 小声/远离麦克风调大：+6~+12（负=衰减）
 
 # === 热词词表（可选）===
@@ -359,7 +359,7 @@ LONG_TEXT_THRESHOLD=80   # 转写字数 ≥ 此值（中文 1 字=1）时，LLM 
 
 短句仍走原来的提炼器。一旦转写达到 `LONG_TEXT_THRESHOLD`，LLM 改用保结构的长内容模板——一段多点口述会保留成多点列表，而不是被压成一句、丢掉细节。
 
-整形之后（常规模式与 EN 模式都生效），一道确定性的**关键 token 丢失守卫**会核对：转写里的阿拉伯数字、以及（常规模式下）否定词（不/别/没…）是否在 LLM 输出里仍然存在。若被静默吞掉（例如「不要删那 5 个按钮」→「删那些按钮」），则改粘**纠错后的原始转写**并在 HUD 给警告。守卫始终开、绝不覆盖忠实的改写、无需配置。
+整形之后（常规模式与 EN 模式都生效），一道确定性的**关键 token 丢失守卫**会核对：转写里的阿拉伯数字是否在 LLM 输出里仍然存在（例如「删那 5 个按钮」不能变成「删那些按钮」）。若数字被静默吞掉，则改粘**纠错后的原始转写**并在 HUD 给警告。守卫始终开、绝不覆盖忠实的改写、无需配置。（1.8.0 曾有否定词守卫，1.8.1 移除：口语中文「看不懂 / 能不能 / 是不是」会频繁误触发、回退原文丢掉标点与润色；否定保留交回 LLM prompt 硬规则。）
 
 ### 动态 Prompt 上下文
 
@@ -505,7 +505,7 @@ RUN_LLM=1 RUN_ASR=1 bash scripts/preflight.sh
 | 默认输入设备 | 系统设置 → 声音 → 输入（用 MacBook Pro Microphone） |
 | 卡死的录音 | `pkill -f "rec -q"; rm -rf /tmp/vinput.lock.d` |
 | Ollama 没启动 | `brew services start ollama` |
-| 说完后结果一直不粘贴 / 卡住 | LLM 这步在等 Ollama。现在会在 `OLLAMA_TIMEOUT`（默认 30s）后超时并改粘贴**原始转写**，不再无限挂起。若经常超时，用 `ollama ps` / `ollama run qwen2.5:3b hi` 查 Ollama；Homebrew 装的 Ollama 若后端损坏（缺 `llama-server`）会让每个请求都卡死——`brew pin ollama` 钉住一个能用的版本。慢机器可调大 `OLLAMA_TIMEOUT`。 |
+| 说完后结果一直不粘贴 / 卡住 | LLM 这步在等 Ollama。现在会在 `OLLAMA_TIMEOUT`（默认 15s）后超时并改粘贴**原始转写**，不再无限挂起。若经常超时，用 `ollama ps` / `ollama run qwen2.5:3b hi` 查 Ollama；Homebrew 装的 Ollama 若后端损坏（缺 `llama-server`）会让每个请求都卡死——`brew pin ollama` 钉住一个能用的版本。慢机器可调大 `OLLAMA_TIMEOUT`。 |
 | HUD 不显示 | `~/.whisper_models/hud "测试" 2` |
 | 中文乱码 | 确认脚本含 `export LANG="en_US.UTF-8"` |
 

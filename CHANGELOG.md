@@ -6,6 +6,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.8.1] — 2026-06-15
+
+Data-driven retune of the two recording/LLM timers, based on a measurement pass over real
+usage + synthesized ASR samples + LLM reshape timing (qwen2.5:3b).
+
+### Changed
+- **`MAX_REC_SECONDS` default 30 → 45.** History showed the 30s cap was clipping real multi-point
+  prompts: p95 of recordings was 25s and the max sat pinned at 29.85s (truncated against the cap,
+  ~3% of recordings). Synthesized ASR samples showed CER stays well inside the 0.20 budget through
+  60s (0.10 @42s, 0.12 @60s) — crossing Whisper's 30s window costs ~7 CER points once, then
+  plateaus — so 45s relieves the clipped tail without a quality cliff. Kept at 45 (not 60) because
+  the cap is also a wedged-`rec` safety guard; `STALE_CEILING = MAX_REC_SECONDS + 60` auto-follows
+  to 105s.
+- **`OLLAMA_TIMEOUT` default 30 → 15.** Measured reshape latency for 30–60s transcripts is only
+  ~1–2.3s on warm qwen2.5:3b — 30s was heavily over-provisioned. 15s still leaves 6–10× headroom
+  (and absorbs a cold load + contention in the pessimistic case) while releasing the recording
+  lock twice as fast when Ollama actually wedges (the failure mode this knob guards, see v1.7.2).
+  Slow / cold-load machines can raise it back in `vinput.conf`.
+
+### Fixed
+- **Orphaned lock could wedge recording permanently with no auto-recovery.** The recording lock is
+  held through the whole pipeline (record → transcribe → reshape → paste). The recording phase
+  already self-heals a stale lock (age > `MAX_REC_SECONDS + 60`), but the post-recording
+  *processing* phase (no `rec.pid` present) did not: if a run was hard-killed mid-processing
+  (SIGKILL / power loss / sleep) before the EXIT trap cleaned up, every later hotkey press hit
+  `⏳ 正在处理上次录音` forever and could never start a new recording until a manual
+  `rm -rf /tmp/vinput.lock.d`. The processing branch now applies the same stale-age check and
+  reclaims an orphaned lock automatically, then starts a fresh recording.
+- **Negation half of the v1.8.0 critical-token guard removed (false-fired on conversational
+  Chinese).** The guard fell back to the raw transcript whenever a 不/没 in the input disappeared
+  from the LLM output — but conversational Chinese (看不懂 / 能不能 / 是不是 / 差不多) uses 不/没
+  non-semantically, and the LLM legitimately drops them. The result: normal speech constantly fell
+  back to the **raw** Whisper text, losing both the polish *and the punctuation* (the user-visible
+  symptom). Chinese negation can't be reliably distinguished from conversational particles by
+  substring matching, so the negation check is gone; the **number guard stays** (high value, no
+  false positives) and negation preservation is left to the LLM prompt's hard rules.
+- **Couldn't immediately re-record after a result was pasted.** The lock was released only at script
+  exit — *after* the post-paste `recent.txt` + `history.jsonl` bookkeeping — so a hotkey press right
+  after the text appeared hit `⏳ 正在处理上次录音`. The lock is now released the moment the final
+  HUD shows (before bookkeeping), with the EXIT trap re-armed to clean only its own tempdir so it
+  can't delete a new recording's lock.
+- **`install.sh` could corrupt an in-flight recording during `--upgrade-only`.** Deploy used `cp`
+  to overwrite `~/.whisper_models/vinput_bg.sh` in place; since bash executes a script by re-reading
+  it at byte offsets, replacing it mid-run made the running process read garbage (`syntax error near
+  'fi'`, run stuck at "转写中"). Deploy now writes a temp file and atomically `mv`s it into place, so
+  a running run keeps its original inode untouched.
+
 ## [1.8.0] — 2026-06-15
 
 Long-content transcription quality: the ASR layer is at its floor for long audio (see the
