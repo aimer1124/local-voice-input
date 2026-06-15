@@ -71,7 +71,7 @@ contains() {
 
 run_case "version" bash -c '
     out=$(HOME="$1" "$2" --version)
-    case "$out" in *"local-voice-input 1.8.0"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
+    case "$out" in *"local-voice-input 1.8.1"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
 ' _ "$TMP_HOME" "$VINPUT"
 
 run_case "help includes new commands" bash -c '
@@ -110,9 +110,15 @@ run_case "guard flags dropped number (full)" bash -c '
     [ "$out" = "drop" ]
 ' _ "$BG"
 
-run_case "guard flags dropped negation (full)" bash -c '
+# v1.8.1: negation guard removed (false-fired on conversational 不/没). Numbers-only now.
+run_case "guard ignores dropped negation (numbers-only, v1.8.1)" bash -c '
     out=$(bash "$1" --test-guard full "不要硬编码密码" "硬编码密码")
-    [ "$out" = "drop" ]
+    [ "$out" = "ok" ]
+' _ "$BG"
+
+run_case "guard ignores conversational 不/没 drop (v1.8.1)" bash -c '
+    out=$(bash "$1" --test-guard full "那我看不懂能不能弄清晰一点" "把这个说得更清楚一点")
+    [ "$out" = "ok" ]
 ' _ "$BG"
 
 run_case "guard passes preserved number (full)" bash -c '

@@ -16,7 +16,7 @@ OLLAMA_MODEL="qwen2.5:3b"    # 换更快/更强的模型见 README「进阶」
 OLLAMA_URL="http://localhost:11434"
 # LLM 整形单次调用的总超时（秒）。ollama 卡死/重载模型时超时即放弃整形、回退粘贴原始
 # 转写，避免整条流水线无限挂起。冷加载大模型很慢的机器可调大（如 60）。
-OLLAMA_TIMEOUT=30
+OLLAMA_TIMEOUT=15
 
 # 文本短于此字数（中文 1 字 = 1）时跳过 LLM，直接用原始转写，省 1–2 秒
 SHORT_TEXT_THRESHOLD=15
@@ -24,7 +24,7 @@ SHORT_TEXT_THRESHOLD=15
 # ===== 录音 / 粘贴行为 =====
 AUTO_PASTE=1                 # 1 = 自动模拟 ⌘V 粘贴（需「辅助功能」权限）；0 = 只复制到剪贴板
 USE_VAD=0                    # 0 = 纯 toggle（推荐，最稳）；1 = 静音自动停（仅安静环境好用）
-MAX_REC_SECONDS=30           # 录音硬超时（秒），防止忘按停一直录
+MAX_REC_SECONDS=45           # 录音硬超时（秒），防止忘按停一直录
 
 # 小声 / 远离麦克风的用户把增益调大：+6 ~ +12。负 = 衰减。
 SOX_GAIN_DB=-3
