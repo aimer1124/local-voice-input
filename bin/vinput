@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.7.2"
+VERSION="1.8.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
@@ -581,6 +581,20 @@ _ensure_corrections_file() {
 }
 
 cmd_corrections() {
+    case "${1:-}" in
+        --suggest) shift; cmd_corrections_suggest "$@"; return $? ;;
+        --help|-h)
+            cat <<'EOF'
+vinput corrections — 谐音纠错表
+
+  vinput corrections             列出当前所有纠错规则
+  vinput corrections --suggest   从转写历史挖掘纠错候选 + 规则命中健康度
+             [--tail N]          只看最近 N 条历史（默认全部）
+
+发现错词后用 vinput add-correction <对> <错> 落库。
+EOF
+            return 0 ;;
+    esac
     if [ ! -f "$CORRECTIONS_FILE" ]; then
         warn "纠错表不存在: $CORRECTIONS_FILE"
         hint "vinput add-correction <对> <错>  追加一条"
@@ -613,6 +627,102 @@ cmd_corrections() {
     done < "$CORRECTIONS_FILE"
     echo
     ok "共 $rules 条规则、$variants 个错写变体"
+}
+
+# ── corrections --suggest (#方向三, v1.8.0) ────────────
+# 从 history.jsonl 数据驱动地维护纠错表（长内容地板击穿器）。两部分，全部只读、只建议：
+#   1) 规则命中健康度：哪些规则常救场（保留）、哪些从未命中（可剪枝）。
+#   2) 未跟踪高频英文词：raw 里反复出现、却不在纠错表/热词里的英文词 —— 候选错词，
+#      用户肉眼判断变体（如 Cloud↔Claude）后用 vinput add-correction 落库。
+# 不做编辑距离自动配对（留作后续）；绝不自动改 CORRECTIONS_FILE。
+cmd_corrections_suggest() {
+    local n="all"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --tail|-n) shift; n="${1:-all}" ;;
+            *) err "未知参数: $1"; exit 2 ;;
+        esac
+        shift
+    done
+
+    if [ ! -f "$HISTORY_FILE" ]; then
+        warn "无历史记录: ${HISTORY_FILE}"
+        hint "触发几次 Raycast 语音输入积累历史后再回来。"
+        return 0
+    fi
+
+    local hist
+    if [ "$n" = "all" ]; then
+        hist=$(cat "$HISTORY_FILE")
+    else
+        hist=$(tail -n "$n" "$HISTORY_FILE")
+    fi
+    local total
+    total=$(printf '%s\n' "$hist" | grep -c . )
+
+    # ── 1. 规则命中健康度 ──
+    section "纠错规则命中（扫了 $total 条历史）"
+    local fired
+    fired=$(printf '%s\n' "$hist" | jq -r '.rules_fired[]?' 2>/dev/null | sort | uniq -c | sort -rn)
+    if [ -n "$fired" ]; then
+        printf '%s\n' "$fired" | while read -r cnt rule; do
+            [ -z "$cnt" ] && continue
+            printf "  ${G}%4s${N}×  %s\n" "$cnt" "$rule"
+        done
+    else
+        hint "历史里还没有任何纠错规则命中。"
+    fi
+
+    # 从未命中的规则（可剪枝）：枚举纠错表里每个 correct←wrong，对比 fired 集合。
+    if [ -f "$CORRECTIONS_FILE" ]; then
+        local fired_keys never="" line c rest w key
+        fired_keys=$(printf '%s\n' "$hist" | jq -r '.rules_fired[]?' 2>/dev/null | sort -u)
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in ''|'#'*) continue ;; esac
+            IFS=$'\t' read -r c rest <<< "$line"
+            [ -z "$c" ] && continue
+            local IFS=$'\t'
+            for w in $rest; do
+                [ -z "$w" ] && continue
+                key="${c}←${w}"
+                if ! printf '%s\n' "$fired_keys" | grep -qxF "$key"; then
+                    never="${never}  ${key}"$'\n'
+                fi
+            done
+            unset IFS
+        done < "$CORRECTIONS_FILE"
+        if [ -n "$never" ]; then
+            section "从未命中的规则（可考虑剪枝）"
+            printf '%s' "$never"
+        fi
+    fi
+
+    # ── 2. 未跟踪的高频英文词（纠错候选）──
+    section "高频英文词（候选错词 — 判断变体后 add-correction）"
+    local covered_file
+    covered_file=$(mktemp)
+    {
+        [ -f "$CORRECTIONS_FILE" ] && grep -v '^#' "$CORRECTIONS_FILE" | tr '\t' '\n'
+        [ -f "$HOTWORDS_FILE" ] && cat "$HOTWORDS_FILE"
+    } 2>/dev/null | grep -oE '[A-Za-z][A-Za-z]+' | sort -u > "$covered_file"
+
+    local cand
+    cand=$(printf '%s\n' "$hist" | jq -r '.raw // empty' 2>/dev/null \
+        | grep -oE '[A-Za-z][A-Za-z]+' \
+        | sort | uniq -c | sort -rn \
+        | awk -v cf="$covered_file" '
+            BEGIN { while ((getline l < cf) > 0) cov[tolower(l)]=1 }
+            { tok=$2 }
+            tok != "" && !(tolower(tok) in cov) && $1+0 >= 2 { printf "  %4s×  %s\n", $1, tok }
+          ')
+    rm -f "$covered_file"
+    if [ -n "$cand" ]; then
+        printf '%s\n' "$cand"
+        echo
+        hint "确认某词是误识别后：vinput add-correction <正确写法> <这个词>"
+    else
+        hint "没有出现 ≥2 次、且未被纠错表/热词覆盖的英文词。"
+    fi
 }
 
 cmd_add_correction() {
@@ -812,7 +922,7 @@ vinput — local-voice-input CLI ($VERSION)
   vinput --version                          显示版本号
   vinput --doctor [--quick]                 运行诊断检查（配置 / Raycast / 工具链 / 运行时 / 麦克风）
   vinput config                             打印当前生效配置
-  vinput corrections                        列出所有谐音纠错规则
+  vinput corrections [--suggest]            列出谐音纠错规则；--suggest 从历史挖候选+命中健康度
   vinput add-correction <对> <错>           追加一条纠错（自动去重）
   vinput remove-correction <对> <错>        删除一条
   vinput history [--tail N | --grep PAT]   查看转写历史（默认最近 20 条）
@@ -833,7 +943,7 @@ case "${1:-help}" in
     --doctor|doctor)              shift; cmd_doctor "$@" ;;
     config)                       print_effective_config ;;
     --setup|setup)                cmd_setup ;;
-    corrections)                  cmd_corrections ;;
+    corrections)                  shift; cmd_corrections "$@" ;;
     add-correction)               shift; cmd_add_correction "$@" ;;
     remove-correction)            shift; cmd_remove_correction "$@" ;;
     history)                      shift; cmd_history "$@" ;;

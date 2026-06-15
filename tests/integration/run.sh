@@ -10,8 +10,10 @@ set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$DIR/../.." && pwd)"
 VINPUT="$ROOT/bin/vinput"
+BG="$ROOT/bin/vinput_bg.sh"
 
 [ -x "$VINPUT" ] || { echo "missing $VINPUT"; exit 1; }
+[ -f "$BG" ] || { echo "missing $BG"; exit 1; }
 
 TMP_HOME="$(mktemp -d -t vinput-integration.XXXXXX)"
 trap 'rm -rf "$TMP_HOME"' EXIT
@@ -37,7 +39,11 @@ cat > "$TMP_HOME/.config/vinput_corrections.tsv" <<'EOF'
 Codex	Code X
 EOF
 
+# 'Code X' 行保持在最后一行：history --tail 1 用例依赖它；前面两行让 corrections --suggest
+# 能挖出高频未跟踪英文词 'Cursor'（出现 2 次、不在纠错表/热词里）。
 cat > "$TMP_HOME/.cache/vinput/history.jsonl" <<'EOF'
+{"ts":"2026-05-30T00:00:00+0800","raw":"用 Cursor 跑一下","corrected":"用 Cursor 跑一下","cleaned":"用 Cursor 跑一下","mode":"full","rules_fired":[],"audio_ms":1200}
+{"ts":"2026-05-31T00:00:00+0800","raw":"Cursor 真好用","corrected":"Cursor 真好用","cleaned":"Cursor 真好用","mode":"raw","rules_fired":[],"audio_ms":1100}
 {"ts":"2026-06-01T00:00:00+0800","raw":"Code X","corrected":"Codex","cleaned":"Codex","mode":"raw","rules_fired":["Codex←Code X"],"audio_ms":1000}
 EOF
 
@@ -65,7 +71,7 @@ contains() {
 
 run_case "version" bash -c '
     out=$(HOME="$1" "$2" --version)
-    case "$out" in *"local-voice-input 1.7.2"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
+    case "$out" in *"local-voice-input 1.8.0"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
 ' _ "$TMP_HOME" "$VINPUT"
 
 run_case "help includes new commands" bash -c '
@@ -92,6 +98,42 @@ run_case "quick doctor shows structural diagnostics" bash -c '
     out=$(HOME="$1" "$2" doctor --quick 2>&1 || true)
     case "$out" in *"有效配置"*"运行目录"*"Raycast 命令"*"quick 模式"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
 ' _ "$TMP_HOME" "$VINPUT"
+
+run_case "corrections --suggest mines history" bash -c '
+    out=$(HOME="$1" "$2" corrections --suggest 2>&1)
+    case "$out" in *"Codex←Code X"*"Cursor"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
+' _ "$TMP_HOME" "$VINPUT"
+
+# 关键 token 丢失守卫（v1.8.0）— 确定性，无需 Ollama。喂 <mode> <raw> <cleaned>，期望 drop|ok。
+run_case "guard flags dropped number (full)" bash -c '
+    out=$(bash "$1" --test-guard full "把页面上的5个按钮去掉" "把页面上的按钮去掉")
+    [ "$out" = "drop" ]
+' _ "$BG"
+
+run_case "guard flags dropped negation (full)" bash -c '
+    out=$(bash "$1" --test-guard full "不要硬编码密码" "硬编码密码")
+    [ "$out" = "drop" ]
+' _ "$BG"
+
+run_case "guard passes preserved number (full)" bash -c '
+    out=$(bash "$1" --test-guard full "把5个按钮去掉" "把 5 个按钮去掉")
+    [ "$out" = "ok" ]
+' _ "$BG"
+
+run_case "guard passes cn/arabic numeral swap (full)" bash -c '
+    out=$(bash "$1" --test-guard full "把5个按钮去掉" "把五个按钮去掉")
+    [ "$out" = "ok" ]
+' _ "$BG"
+
+run_case "guard passes en number, skips negation (en)" bash -c '
+    out=$(bash "$1" --test-guard en "不要删掉5个按钮" "remove the 5 buttons")
+    [ "$out" = "ok" ]
+' _ "$BG"
+
+run_case "guard skips non-LLM modes (short)" bash -c '
+    out=$(bash "$1" --test-guard short "5个" "取消")
+    [ "$out" = "ok" ]
+' _ "$BG"
 
 if [ "$FAIL" = "0" ]; then
     echo "✓ integration tests pass"
