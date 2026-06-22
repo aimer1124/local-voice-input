@@ -279,6 +279,7 @@ WHISPER_LANG="zh"              # mixed CN/EN is guided by the hotword prompt
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
 OLLAMA_TIMEOUT=15              # LLM call timeout (s); on timeout, paste raw transcript instead of hanging. Raise on slow cold-loads
+OLLAMA_WARMUP=1               # 1 = preload the model in the background when recording starts, so the LLM step is warm by the time transcription finishes (kills the "can't re-record for ~15s after the first take" stall). 0 to disable
 SHORT_TEXT_THRESHOLD=15        # text shorter than this (CN: 1 char = 1) skips the LLM, saving 1–2s
 
 # === Recording / paste behavior ===

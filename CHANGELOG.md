@@ -6,6 +6,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.8.3] — 2026-06-22
+
+Kill the "can't re-record right after the first take" stall by warming Ollama while you speak.
+
+### Added
+- **`OLLAMA_WARMUP` (default `1`) — preload the reshape model when recording starts.** The recording
+  lock is held through the whole pipeline (record → transcribe → reshape → paste), so pressing the
+  hotkey during the previous round's processing hits `⏳ 正在处理上次录音` and can't start a new
+  recording until that round releases the lock. The dominant cost in that window is a **cold Ollama
+  load**: with `keep_alive=30m` the model unloads after 30 min idle, so the *first* take of a session
+  pays ~10–15s of model-load latency inside the locked window — exactly the "finish recording, press
+  again within a few seconds, stuck for 10–30s" symptom. The fix fires a fire-and-forget Ollama
+  preload (empty-prompt `generate`, `done_reason: "load"`, `keep_alive=30m` matching the real call)
+  the moment `rec` starts, overlapping model load with the time you spend speaking + Whisper
+  transcribing. By the time transcription finishes the model is resident and `clean_with_llm` runs on
+  the warm path (seconds), collapsing the locked window. Connect-timeout 2s / max-time `OLLAMA_TIMEOUT`,
+  so a down/slow Ollama silently no-ops and never blocks recording; skipped in RAW mode (no LLM). Set
+  `OLLAMA_WARMUP=0` to disable. Documented in `README.md` / `README.zh.md` / `config/vinput.conf.example`.
+
+  Note: this flattens the cold-start spike but does **not** decouple recording from processing — the
+  two still share one lock, so the hotkey is still blocked for the (now much shorter, Whisper-bound)
+  duration of the previous round. True back-to-back recording would need a separate processing queue.
+
 ## [1.8.2] — 2026-06-15
 
 LLM faithfulness hardening, after a recording came back with the **opposite** meaning

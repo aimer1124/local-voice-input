@@ -278,6 +278,7 @@ WHISPER_LANG="zh"              # 中英混读靠热词 prompt 引导
 OLLAMA_MODEL="qwen2.5:3b"
 OLLAMA_URL="http://localhost:11434"
 OLLAMA_TIMEOUT=15              # LLM 调用超时（秒）；超时则粘贴原始转写而非无限挂起。冷加载慢的机器调大
+OLLAMA_WARMUP=1               # 1 = 录音一开始就后台预加载模型，等转写完成时 LLM 已热（消除「第一次录完约 15 秒内开不了新录音」的卡顿）；0 关闭
 SHORT_TEXT_THRESHOLD=15        # 短于此字数（中文 1 字=1）跳过 LLM，省 1–2 秒
 
 # === 录音 / 粘贴行为 ===

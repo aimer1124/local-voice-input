@@ -26,6 +26,11 @@ OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 # 回退粘贴「原始转写」，避免整条流水线无限挂起（曾因 ollama 后端损坏卡死 >4 分钟，
 # 占住锁导致之后每次触发都误判「已停止」）。冷加载大模型慢的机器可调大。
 OLLAMA_TIMEOUT="${OLLAMA_TIMEOUT:-15}"
+# LLM 预热（v1.8.3）：录音一启动就后台预加载 OLLAMA_MODEL，把「模型冷加载」与「说话+whisper
+# 转写」时间重叠。等转写完成时模型已常驻，clean_with_llm 不再吃首次冷启动那十几秒 —— 直接
+# 缩短「停止→粘贴」期间的锁占用窗口（这段时间里再按快捷键会撞「⏳ 正在处理上次录音」、开不了新录音）。
+# fire-and-forget：失败/超时都不影响录音。设 0 关闭。RAW 模式不过 LLM，下面会自动跳过预热。
+OLLAMA_WARMUP="${OLLAMA_WARMUP:-1}"
 WHISPER_LANG="${WHISPER_LANG:-zh}"
 WHISPER_THREADS="${WHISPER_THREADS:-8}"
 SHORT_TEXT_THRESHOLD="${SHORT_TEXT_THRESHOLD:-15}"
@@ -675,6 +680,20 @@ else
 fi
 REC_PID=$!
 echo "$REC_PID" > "$REC_PID_FILE"
+
+# LLM 预热（v1.8.3）：rec 已在录音，立刻后台预加载 qwen，让模型冷加载与「说话+whisper 转写」
+# 重叠 —— 等下面转写完成时模型已常驻，clean_with_llm 走热路径（秒级），不再吃首次冷启动那十几秒。
+# 这正是「第一次录完、马上再按却开不了新录音」卡顿的主因：上一轮的转写+冷 LLM 一直占着锁。
+# 空 prompt 即 Ollama 官方的「只加载模型」用法；keep_alive 与真实调用一致(30m)，让后续轮次也热。
+# fire-and-forget：连不上/超时都静默放弃，绝不阻塞或影响录音。RAW 模式不过 LLM → 跳过。
+if [ "${OLLAMA_WARMUP:-1}" = "1" ] && [ "${VINPUT_RAW:-0}" != "1" ]; then
+    warmup_payload=$(jq -n --arg model "$OLLAMA_MODEL" --arg keep_alive "30m" \
+        '{model:$model, prompt:"", stream:false, keep_alive:$keep_alive}')
+    ( curl -s --connect-timeout 2 --max-time "$OLLAMA_TIMEOUT" \
+        -X POST "$OLLAMA_URL/api/generate" \
+        -H "Content-Type: application/json" \
+        -d "$warmup_payload" >/dev/null 2>&1 ) &
+fi
 
 # Warmup：等 rec 真正打开音频设备后再给用户「开始」信号，避免首字被 buffer 抖动吃掉。
 if [ "$REC_WARMUP_MS" -gt 0 ] 2>/dev/null; then
