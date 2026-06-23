@@ -286,6 +286,7 @@ AUTO_PASTE=1                   # 1=自动 ⌘V（需辅助功能权限），0=�
 USE_VAD=0                      # 0=纯 toggle（推荐），1=静音自动停（仅安静环境）
 MAX_REC_SECONDS=45             # 录音硬超时（秒）
 STOP_KILL_GRACE=3              # 按停止后，rec 若 N 秒内没响应 SIGINT（设备 wedge）就强杀
+DOUBLE_FIRE_GRACE=0.7          # 录音开始 N 秒内的停止当作 Raycast 重复触发忽略（double-fire 去抖）
 SOX_GAIN_DB=-3                 # 小声/远离麦克风调大：+6~+12（负=衰减）
 
 # === 热词词表（可选）===

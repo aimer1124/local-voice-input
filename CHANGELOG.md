@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.8.5] — 2026-06-23
+
+Stop a single hotkey press from looking like it did nothing when Raycast double-fires it.
+
+### Fixed
+- **A Raycast double-fire could make "record again" look unresponsive.** Raycast occasionally
+  launches a Script Command twice for one hotkey press (caught in the field: two same-second
+  invocations of the command for a single press). The two processes race on the lock — one starts
+  recording, the other finds the lock held and, depending on sub-millisecond timing, either stops
+  the recording its twin just started or flashes `⏳ 正在处理上次录音` over the `🎙️ 录音中` HUD
+  (the HUD is last-writer-wins), so the press looks like it did nothing. The toggle path now
+  **debounces double-fires**: if the lock was created less than `DOUBLE_FIRE_GRACE` seconds ago
+  (default `0.7`, sub-second age via `perl -MTime::HiRes`), the toggle is treated as a duplicate
+  launch of the same keypress and exits silently — it neither stops the recording nor shows a HUD.
+  A real stop never lands that fast after a recording starts (field stops were 2–23s in), so genuine
+  toggles are unaffected. New `DOUBLE_FIRE_GRACE` knob, documented in README / conf.
+
 ## [1.8.4] — 2026-06-23
 
 Fix a multi-second freeze when a wedged audio device makes `rec` ignore the stop press.
