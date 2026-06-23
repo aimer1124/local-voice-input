@@ -285,6 +285,7 @@ SHORT_TEXT_THRESHOLD=15        # 短于此字数（中文 1 字=1）跳过 LLM�
 AUTO_PASTE=1                   # 1=自动 ⌘V（需辅助功能权限），0=只复制
 USE_VAD=0                      # 0=纯 toggle（推荐），1=静音自动停（仅安静环境）
 MAX_REC_SECONDS=45             # 录音硬超时（秒）
+STOP_KILL_GRACE=3              # 按停止后，rec 若 N 秒内没响应 SIGINT（设备 wedge）就强杀
 SOX_GAIN_DB=-3                 # 小声/远离麦克风调大：+6~+12（负=衰减）
 
 # === 热词词表（可选）===

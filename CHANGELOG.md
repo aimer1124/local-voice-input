@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.8.4] — 2026-06-23
+
+Fix a multi-second freeze when a wedged audio device makes `rec` ignore the stop press.
+
+### Fixed
+- **Pressing stop did nothing for ~48s when the audio input device wedged.** SoX/`rec` only checks
+  for SIGINT between audio-buffer reads, so when the CoreAudio input device hangs mid-recording it
+  ignores the `kill -INT` a stop press sends and keeps running until the `MAX_REC_SECONDS + 3`
+  hard-timeout SIGKILL — holding the lock ~48–56s, during which no new recording can start.
+  Observed in the field via stage-timing logs: two consecutive takes each ran the full 45s despite
+  repeated stop presses, only dying at the backstop KILL. A stop press now **fast-escalates**: after
+  `STOP_KILL_GRACE` seconds (default 3) it SIGKILLs a still-alive `rec`, bounding a wedged stop to a
+  few seconds instead of ~48s. The escalator re-checks the pid is still a live `rec ` before killing
+  (same guard as the zombie-reap path) to avoid a pid-reuse mis-kill. Healthy stops honor SIGINT in
+  under a second, so the kill never fires on them. New `STOP_KILL_GRACE` knob, documented in
+  `README.md` / `README.zh.md` / `config/vinput.conf.example`.
+
 ## [1.8.3] — 2026-06-22
 
 Kill the "can't re-record right after the first take" stall by warming Ollama while you speak.
