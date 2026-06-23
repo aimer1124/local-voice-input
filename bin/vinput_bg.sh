@@ -50,6 +50,13 @@ MAX_REC_SECONDS="${MAX_REC_SECONDS:-45}"
 # dead lock, observed in the field). This bounds a wedged stop to a few seconds. Healthy stops
 # honor INT in <1s, so the kill never fires on them.
 STOP_KILL_GRACE="${STOP_KILL_GRACE:-3}"
+# Debounce window (seconds) for Raycast double-fires. Raycast occasionally launches a Script
+# Command twice for a single hotkey press (confirmed in the field via two same-second invocations);
+# the twin that loses the lock race would otherwise stop the just-started recording or flash
+# "正在处理上次录音" over the "录音中" HUD — making the press look like it did nothing. A toggle that
+# arrives within this many seconds of the lock being created is treated as that duplicate launch
+# and ignored. A real stop never lands this fast after a recording starts.
+DOUBLE_FIRE_GRACE="${DOUBLE_FIRE_GRACE:-0.7}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$HOME/.config/vinput_hotwords.txt}"
 CORRECTIONS_FILE="${CORRECTIONS_FILE:-$HOME/.config/vinput_corrections.tsv}"
 HISTORY_FILE="${HISTORY_FILE:-$HOME/.cache/vinput/history.jsonl}"
@@ -582,6 +589,17 @@ else
 fi
 
 if [ "$MODE" = "toggle" ]; then
+    # Double-fire debounce (see DOUBLE_FIRE_GRACE): if the lock was created < DOUBLE_FIRE_GRACE
+    # seconds ago, this toggle is almost certainly Raycast firing the same keypress twice — the
+    # twin already grabbed the lock and is starting to record. Exit silently so we neither stop
+    # that recording nor clobber its "录音中" HUD with "正在处理". Sub-second lock age via perl
+    # (BSD `date` has no %N); falls back to 999 (never debounce) if perl/stat is unavailable.
+    LOCK_AGE_HR=$(perl -MTime::HiRes=time,stat -e \
+        'my @s=stat($ARGV[0]); printf "%.3f", @s ? time-$s[9] : 999' "$LOCK_DIR" 2>/dev/null || echo 999)
+    if awk "BEGIN{exit !($LOCK_AGE_HR < $DOUBLE_FIRE_GRACE)}"; then
+        exit 0
+    fi
+
     if [ -f "$REC_PID_FILE" ]; then
         REC_PID=$(cat "$REC_PID_FILE" 2>/dev/null)
         # 锁年龄健全性检查：一次健康录音 = 录音(≤MAX_REC_SECONDS) + 转写(数秒)，远低于此上限。

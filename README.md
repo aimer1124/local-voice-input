@@ -287,6 +287,7 @@ AUTO_PASTE=1                   # 1 = auto ⌘V (needs Accessibility), 0 = copy o
 USE_VAD=0                      # 0 = pure toggle (recommended), 1 = auto-stop on silence (quiet rooms only)
 MAX_REC_SECONDS=45             # recording hard timeout (seconds)
 STOP_KILL_GRACE=3              # on STOP, force-kill rec after N s if it ignores SIGINT (wedged audio device)
+DOUBLE_FIRE_GRACE=0.7          # ignore a stop that lands within N s of record start (Raycast double-fire guard)
 SOX_GAIN_DB=-3                 # too quiet / far from mic? raise to +6~+12 (negative = attenuate)
 
 # === Hotword list (optional) ===
