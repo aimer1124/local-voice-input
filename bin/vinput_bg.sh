@@ -43,6 +43,13 @@ SILENCE_TAIL="${SILENCE_TAIL:-1.5}"
 SILENCE_START_THRESHOLD="${SILENCE_START_THRESHOLD:-0.5%}"
 SILENCE_STOP_THRESHOLD="${SILENCE_STOP_THRESHOLD:-6%}"
 MAX_REC_SECONDS="${MAX_REC_SECONDS:-45}"
+# Grace (seconds) before a STOP press force-kills a wedged recorder. Pressing the hotkey to stop
+# sends rec SIGINT for a clean stop; if rec is still alive after this long it gets SIGKILL'd.
+# Why: SoX/rec only checks for SIGINT between audio-buffer reads, so when the CoreAudio input
+# device wedges it ignores INT and runs until the MAX_REC_SECONDS+3 hard-timeout KILL (~48s of
+# dead lock, observed in the field). This bounds a wedged stop to a few seconds. Healthy stops
+# honor INT in <1s, so the kill never fires on them.
+STOP_KILL_GRACE="${STOP_KILL_GRACE:-3}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$HOME/.config/vinput_hotwords.txt}"
 CORRECTIONS_FILE="${CORRECTIONS_FILE:-$HOME/.config/vinput_corrections.tsv}"
 HISTORY_FILE="${HISTORY_FILE:-$HOME/.cache/vinput/history.jsonl}"
@@ -583,8 +590,21 @@ if [ "$MODE" = "toggle" ]; then
         LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || date +%s) ))
         STALE_CEILING=$(( MAX_REC_SECONDS + 60 ))
         if [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null && [ "$LOCK_AGE" -le "$STALE_CEILING" ]; then
-            # 正常 toggle：停止进行中的录音（硬超时守卫已含 KILL 兜底，这里发 INT 即可）
+            # Normal toggle: stop the in-progress recording. Send SIGINT for a clean stop (rec
+            # finalizes the WAV), then fast-escalate to SIGKILL if rec is still alive after
+            # STOP_KILL_GRACE seconds. Why: SoX/rec only checks for SIGINT between audio-buffer
+            # reads, so a wedged CoreAudio device makes rec ignore INT and run until the
+            # MAX_REC_SECONDS+3 backstop (~48s of dead lock — observed in the field). The user
+            # pressed stop NOW, so bound a wedged stop to a few seconds instead. The escalator is
+            # detached so it outlives this toggle instance (which exits just below); it re-checks
+            # the pid is still a live `rec ` before KILL to avoid a pid-reuse mis-kill (same guard
+            # as the zombie-reap branch above).
             kill -INT "$REC_PID" 2>/dev/null
+            ( sleep "$STOP_KILL_GRACE"
+              if kill -0 "$REC_PID" 2>/dev/null \
+                 && ps -p "$REC_PID" -o command= 2>/dev/null | grep -q 'rec '; then
+                  kill -KILL "$REC_PID" 2>/dev/null
+              fi ) &
             afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &
             hud "🛑 已停止，转写中..." 60
             exit 0

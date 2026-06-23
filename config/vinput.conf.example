@@ -29,6 +29,9 @@ SHORT_TEXT_THRESHOLD=15
 AUTO_PASTE=1                 # 1 = 自动模拟 ⌘V 粘贴（需「辅助功能」权限）；0 = 只复制到剪贴板
 USE_VAD=0                    # 0 = 纯 toggle（推荐，最稳）；1 = 静音自动停（仅安静环境好用）
 MAX_REC_SECONDS=45           # 录音硬超时（秒），防止忘按停一直录
+# 按停止后，rec 若在此秒数内没响应 SIGINT（音频设备 wedge、收不到信号）就强杀（SIGKILL），
+# 把卡死从 MAX_REC_SECONDS+3 秒压到几秒。设备正常时 INT 不到 1 秒就停，这个强杀不会触发。
+STOP_KILL_GRACE=3
 
 # 小声 / 远离麦克风的用户把增益调大：+6 ~ +12。负 = 衰减。
 SOX_GAIN_DB=-3

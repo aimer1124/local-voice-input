@@ -286,6 +286,7 @@ SHORT_TEXT_THRESHOLD=15        # text shorter than this (CN: 1 char = 1) skips t
 AUTO_PASTE=1                   # 1 = auto ⌘V (needs Accessibility), 0 = copy only
 USE_VAD=0                      # 0 = pure toggle (recommended), 1 = auto-stop on silence (quiet rooms only)
 MAX_REC_SECONDS=45             # recording hard timeout (seconds)
+STOP_KILL_GRACE=3              # on STOP, force-kill rec after N s if it ignores SIGINT (wedged audio device)
 SOX_GAIN_DB=-3                 # too quiet / far from mic? raise to +6~+12 (negative = attenuate)
 
 # === Hotword list (optional) ===
