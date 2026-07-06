@@ -481,7 +481,7 @@ hud() {
         disown 2>/dev/null
     else
         # HUD 二进制不存在时降级到系统通知
-        osascript -e "display notification \"$msg\" with title \"vinput\"" &
+        osascript -e "display notification \"$msg\" with title \"vinput\"" >/dev/null 2>&1 &
     fi
 }
 
@@ -643,8 +643,8 @@ if [ "$MODE" = "toggle" ]; then
               if kill -0 "$REC_PID" 2>/dev/null \
                  && ps -p "$REC_PID" -o command= 2>/dev/null | grep -q 'rec '; then
                   kill -KILL "$REC_PID" 2>/dev/null
-              fi ) &
-            afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &
+              fi ) >/dev/null 2>&1 &
+            afplay /System/Library/Sounds/Tink.aiff >/dev/null 2>&1 &
             hud "🛑 已停止，转写中..." 60
             vlog "toggle:stop rec_pid=$REC_PID lock_age=${LOCK_AGE}s grace=${STOP_KILL_GRACE}s"
             exit 0
@@ -737,13 +737,18 @@ else
     SOX_TAIL=(channels 1 rate 16000 gain -3)
 fi
 
+# ⚠️ 所有 detach 的后台子进程（rec/守卫/afplay/预热/剪贴板还原）必须 >/dev/null 2>&1：
+# Raycast 要等脚本 stdout 的 EOF 才认为命令结束，任何继承了 stdout 的孤儿进程都会让
+# Raycast 把后续快捷键按压悬挂到 EOF 才放行 —— v1.9.1 实测：守卫子 shell 被 kill 后其
+# 孤儿 sleep 攥着管道到 rec:start+45s，期间按快捷键连 raycast:fire 都不产生（lock.log
+# 里两次「取消后拉不起录音」的恢复时刻都精确 = rec:start+MAX_REC_SECONDS）。
 if [ "$USE_VAD" = "1" ]; then
     rec -q -c 1 -r 48000 -b 16 "$AUDIO_PATH" \
         silence 1 0.1 "$SILENCE_START_THRESHOLD" 1 "$SILENCE_TAIL" "$SILENCE_STOP_THRESHOLD" \
-        "${SOX_TAIL[@]}" &
+        "${SOX_TAIL[@]}" >/dev/null 2>&1 &
 else
     rec -q -c 1 -r 48000 -b 16 "$AUDIO_PATH" \
-        "${SOX_TAIL[@]}" &
+        "${SOX_TAIL[@]}" >/dev/null 2>&1 &
 fi
 REC_PID=$!
 echo "$REC_PID" > "$REC_PID_FILE"
@@ -760,14 +765,14 @@ if [ "${OLLAMA_WARMUP:-1}" = "1" ] && [ "${VINPUT_RAW:-0}" != "1" ]; then
     ( curl -s --connect-timeout 2 --max-time "$OLLAMA_TIMEOUT" \
         -X POST "$OLLAMA_URL/api/generate" \
         -H "Content-Type: application/json" \
-        -d "$warmup_payload" >/dev/null 2>&1 ) &
+        -d "$warmup_payload" ) >/dev/null 2>&1 &
 fi
 
 # Warmup：等 rec 真正打开音频设备后再给用户「开始」信号，避免首字被 buffer 抖动吃掉。
 if [ "$REC_WARMUP_MS" -gt 0 ] 2>/dev/null; then
     sleep "$(awk "BEGIN {print $REC_WARMUP_MS / 1000}")"
 fi
-afplay /System/Library/Sounds/Pop.aiff 2>/dev/null &
+afplay /System/Library/Sounds/Pop.aiff >/dev/null 2>&1 &
 
 # ESC 取消：录音期间 1 秒内连按两次 ESC 丢弃本轮（不转写、不粘贴、立刻可重录）。HUD 确认
 # 双击后写 cancel 标记并 INT rec；下面 rec 停止后看到标记即清锁退出。为什么双击（v1.9.1）：
@@ -784,7 +789,15 @@ unset HUD_ON_ESC_CMD   # 只挂在「录音中」这一个 HUD 上，后续阶�
 # ⚠️ 没有这层 KILL，rec 会永久运行 → 锁永不释放 → 之后每次触发都被误判成「已停止，转写中」
 #    （实测过一次：rec 卡了两天，必须 kill -9 才掉）。下面的 wait 正常返回后会 kill 掉本守卫，
 #    所以正常录音里这层 KILL 永远不会触发。
-( sleep "$MAX_REC_SECONDS"; kill -INT "$REC_PID" 2>/dev/null; sleep 3; kill -KILL "$REC_PID" 2>/dev/null ) &
+# 注意：kill GUARD_PID 只杀子 shell，杀不掉它孵的 sleep —— 孤儿 sleep 到点后子命令仍会跑。
+# 因此 (a) 整个子 shell 重定向（见上方 ⚠️），孤儿不再攥 Raycast 管道；(b) kill 前重查
+# rec.pid 文件仍指向本轮 REC_PID 才动手 —— 正常轮次 rec.pid 早已删除，孤儿到点即空转，
+# 也顺带堵了 pid 复用误杀。
+( sleep "$MAX_REC_SECONDS"
+  [ "$(cat "$REC_PID_FILE" 2>/dev/null)" = "$REC_PID" ] || exit 0
+  kill -INT "$REC_PID" 2>/dev/null; sleep 3
+  [ "$(cat "$REC_PID_FILE" 2>/dev/null)" = "$REC_PID" ] || exit 0
+  kill -KILL "$REC_PID" 2>/dev/null ) >/dev/null 2>&1 &
 GUARD_PID=$!
 
 wait "$REC_PID" 2>/dev/null
@@ -800,12 +813,12 @@ vlog "rec:stop"
 # 误以为「录音没拉起」。
 if [ -f "$LOCK_DIR/cancel" ]; then
     vlog "exit:cancelled held=$(( $(date +%s) - LOCK_T0 ))s"
-    afplay /System/Library/Sounds/Bottle.aiff 2>/dev/null &
+    afplay /System/Library/Sounds/Bottle.aiff >/dev/null 2>&1 &
     hud "🚫 已取消 · 未粘贴任何内容" 3
     exit 0
 fi
 
-afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &
+afplay /System/Library/Sounds/Tink.aiff >/dev/null 2>&1 &
 hud "💭 转写中..." 30
 
 if [ ! -f "$AUDIO_PATH" ] || [ ! -s "$AUDIO_PATH" ]; then
@@ -921,7 +934,7 @@ vlog "paste:done auto_paste=$AUTO_PASTE ax_denied=$AX_DENIED"
 # 剪贴板恢复：⌘V 已发出且未被权限拒绝 → 延迟 1s（等目标 App 真正读完剪贴板）后台还原。
 # 粘贴失败（AX_DENIED）时跳过：用户此刻需要剪贴板里是转写结果，好手动 ⌘V。
 if [ -n "$SAVED_CLIPBOARD" ] && [ "$AUTO_PASTE" = "1" ] && [ "$AX_DENIED" = "0" ]; then
-    ( sleep 1; printf '%s' "$SAVED_CLIPBOARD" | pbcopy ) &
+    ( sleep 1; printf '%s' "$SAVED_CLIPBOARD" | pbcopy ) >/dev/null 2>&1 &
     disown 2>/dev/null
 fi
 

@@ -6,6 +6,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.9.2] — 2026-07-06
+
+Fix the hotkey going dead for up to `MAX_REC_SECONDS` after a cancel — and, most likely, the long-standing "pressed the hotkey right after a take and nothing happened" mystery.
+
+### Fixed
+- **Raycast deferred the next hotkey press until `rec:start + MAX_REC_SECONDS`.** `lock.log` showed
+  two cancel repros where the next `raycast:fire` landed **exactly 45s after the previous
+  `rec:start`** — presses in between produced no `raycast:fire` at all, i.e. Raycast never launched
+  the command, while the lock was long released (`press lock=free`). Root cause: Raycast waits for
+  the script's stdout EOF before treating a run as finished, and backgrounded children inherited
+  that pipe. The worst offender was the hard-timeout guard: `kill $GUARD_PID` kills the subshell
+  but **not its `sleep $MAX_REC_SECONDS` child**, so the orphaned sleep held the pipe until 45s
+  after recording started. Every detached child (`rec`, guard, `afplay`, Ollama warmup,
+  clipboard-restore) is now spawned with `>/dev/null 2>&1`, so EOF arrives the moment the script
+  exits. Verified end-to-end: cancel at 2s → pipe EOF at 2s (was `MAX_REC_SECONDS`).
+  This mechanism also explains the historical "record again right after a take does nothing"
+  reports (#42's data-gathering motive): presses landing after the lock release but before the
+  orphan sleep expired were silently deferred by Raycast — no lock bug involved.
+- **Guard pid-reuse hardening.** The (now harmless, no longer pipe-holding) orphaned guard re-checks
+  that `rec.pid` still names this round's recorder before its INT/KILL, so a recycled pid can't be
+  mis-killed after the round ends.
+
 ## [1.9.1] — 2026-07-06
 
 Fix v1.9.0's ESC-cancel silently killing recordings.
@@ -763,7 +785,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.9.1...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.9.2...HEAD
+[1.9.2]: https://github.com/aimer1124/local-voice-input/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/aimer1124/local-voice-input/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/aimer1124/local-voice-input/compare/v1.8.5...v1.9.0
 [1.5.0]: https://github.com/aimer1124/local-voice-input/compare/v1.4.0...v1.5.0
