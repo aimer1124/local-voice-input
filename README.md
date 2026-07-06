@@ -402,7 +402,7 @@ SILENCE_STOP_THRESHOLD="6%"
 # HUD_SHOW_RESULT=1       # after pasting, the HUD shows what was actually pasted (truncated to 60 chars)
 # HUD_FINAL_DURATION=2.5  # how many seconds the final state lingers
 # HUD_RERUN_ON_UP=0       # 1 = press ↑ during the final state to instantly re-run the full pipeline (ESC always closes immediately)
-# HUD_CANCEL_ON_ESC=1     # 0 = disable. Press ESC while recording to discard the take — no transcription,
+# HUD_CANCEL_ON_ESC=1     # 0 = disable. Double-press ESC (within 1s) while recording to discard the take —
 #                         # no paste, ready to re-record immediately
 ```
 

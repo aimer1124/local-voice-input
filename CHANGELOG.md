@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.9.1] — 2026-07-06
+
+Fix v1.9.0's ESC-cancel silently killing recordings.
+
+### Fixed
+- **A stray ESC anywhere killed the recording.** The ESC-cancel monitor is global and stays armed
+  for the whole recording window (up to 45s), so an ESC meant for another app — dismissing an IME
+  candidate list, vim, closing a popup — cancelled the take, and the silent 1.5s `🚫 已取消` HUD was
+  easy to miss, making it look like the hotkey "didn't start a recording" (diagnosed from
+  `~/.cache/vinput/lock.log`: `rec:stop` + `exit:cancelled` with no `raycast:fire`/`toggle:stop`
+  in between). Cancel now requires a **double-press of ESC within 1s**: the first press only swaps
+  the HUD text to `再按一次 ESC 取消录音`, interrupting nothing. The cancel confirmation is now
+  audible (Bottle) and lingers 3s (`🚫 已取消 · 未粘贴任何内容`).
+
 ## [1.9.0] — 2026-07-06
 
 Quality-of-life pass distilled from a survey of peer open-source dictation tools (VoiceInk, go-whisper, whisper-local, FreeFlow et al.); the two larger follow-ups it queued are [#42](https://github.com/aimer1124/local-voice-input/issues/42) (decouple recording from processing) and [#43](https://github.com/aimer1124/local-voice-input/issues/43) (per-app mode override).
@@ -749,7 +763,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/aimer1124/local-voice-input/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/aimer1124/local-voice-input/compare/v1.8.5...v1.9.0
 [1.5.0]: https://github.com/aimer1124/local-voice-input/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/aimer1124/local-voice-input/compare/v1.3.0...v1.4.0
