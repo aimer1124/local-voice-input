@@ -1,0 +1,14 @@
+# 按 App 模式覆盖（#43）— 复制到 ~/.config/vinput_app_modes.tsv 后生效；文件不存在 = 功能关闭。
+# 格式：每行「bundle-id<TAB>mode」，mode ∈ raw | en。# 开头为注释。
+#   raw = 跳过 LLM 意图重构，粘贴 Whisper 原文（终端里要命令原文时用）
+#   en  = 说中文出英文（跟海外同事的聊天工具里用）
+# 查看某个 App 的 bundle id：先把它切到前台，再跑
+#   lsappinfo info -only bundleid "$(lsappinfo front)"
+# 显式使用 Raw / EN 快捷键时，这里的映射不会覆盖你的手动选择。
+#
+# 常用终端（去掉行首 # 即启用）：
+# com.apple.Terminal	raw
+# com.googlecode.iterm2	raw
+# dev.warp.Warp-Stable	raw
+# net.kovidgoyal.kitty	raw
+# com.github.wez.wezterm	raw
