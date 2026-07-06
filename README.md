@@ -411,6 +411,16 @@ SILENCE_STOP_THRESHOLD="6%"
 
 HUD appearance (8 knobs: position/font/material/etc.) is covered in [HUD style adjustments](#hud-style-adjustments) above.
 
+### Per-app mode override
+
+Automatically switch mode based on the frontmost app at the moment you press the hotkey — e.g. get the raw transcript (no LLM reshaping) inside terminals. Off by default: the feature only activates if the mapping file exists.
+
+```bash
+APP_MODES_FILE="$HOME/.config/vinput_app_modes.tsv"   # one "bundle-id<TAB>mode" per line, mode ∈ raw|en
+```
+
+Copy `config/vinput_app_modes.example.tsv` there and uncomment the terminals you use. Find any app's bundle id with `lsappinfo info -only bundleid "$(lsappinfo front)"` (bring it frontmost first). Detection uses `lsappinfo` — no new permissions, ~10ms, never delays recording start. An explicit Raw/EN hotkey always wins over the map; any lookup failure silently falls back to the default mode.
+
 ### Clipboard restore
 
 ```bash

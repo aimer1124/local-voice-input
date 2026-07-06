@@ -71,7 +71,7 @@ contains() {
 
 run_case "version" bash -c '
     out=$(HOME="$1" "$2" --version)
-    case "$out" in *"local-voice-input 1.9.2"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
+    case "$out" in *"local-voice-input 1.10.0"*) exit 0 ;; *) printf "%s\n" "$out"; exit 1 ;; esac
 ' _ "$TMP_HOME" "$VINPUT"
 
 run_case "help includes new commands" bash -c '
@@ -140,6 +140,39 @@ run_case "guard skips non-LLM modes (short)" bash -c '
     out=$(bash "$1" --test-guard short "5个" "取消")
     [ "$out" = "ok" ]
 ' _ "$BG"
+
+# 按 App 模式覆盖（#43）— 确定性，喂 <bundle-id>，期望 raw|en|default。
+cat > "$TMP_HOME/.config/vinput_app_modes.tsv" <<'EOF'
+# comment line
+com.googlecode.iterm2	raw
+com.apple.Terminal	raw
+com.tencent.xinWeChat	en
+EOF
+
+run_case "app-mode maps terminal to raw" bash -c '
+    out=$(APP_MODES_FILE="$1/.config/vinput_app_modes.tsv" bash "$2" --test-app-mode com.googlecode.iterm2)
+    [ "$out" = "raw" ]
+' _ "$TMP_HOME" "$BG"
+
+run_case "app-mode maps configured app to en" bash -c '
+    out=$(APP_MODES_FILE="$1/.config/vinput_app_modes.tsv" bash "$2" --test-app-mode com.tencent.xinWeChat)
+    [ "$out" = "en" ]
+' _ "$TMP_HOME" "$BG"
+
+run_case "app-mode unmapped app stays default" bash -c '
+    out=$(APP_MODES_FILE="$1/.config/vinput_app_modes.tsv" bash "$2" --test-app-mode com.apple.Safari)
+    [ "$out" = "default" ]
+' _ "$TMP_HOME" "$BG"
+
+run_case "app-mode explicit hotkey wins over map" bash -c '
+    out=$(VINPUT_RAW=1 APP_MODES_FILE="$1/.config/vinput_app_modes.tsv" bash "$2" --test-app-mode com.tencent.xinWeChat)
+    [ "$out" = "raw" ]
+' _ "$TMP_HOME" "$BG"
+
+run_case "app-mode missing file is a no-op" bash -c '
+    out=$(APP_MODES_FILE="$1/.config/nonexistent.tsv" bash "$2" --test-app-mode com.googlecode.iterm2)
+    [ "$out" = "default" ]
+' _ "$TMP_HOME" "$BG"
 
 if [ "$FAIL" = "0" ]; then
     echo "✓ integration tests pass"

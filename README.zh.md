@@ -409,6 +409,16 @@ SILENCE_STOP_THRESHOLD="6%"
 
 HUD 外观（位置/字号/材质等 8 项）见上方 [HUD 样式调整](#hud-样式调整)。
 
+### 按 App 模式覆盖
+
+按下快捷键那一刻，根据前台 App 自动切换模式——典型用法：终端里要命令原文，自动走 Raw（跳过 LLM 意图重构）。默认关闭：映射文件存在才生效。
+
+```bash
+APP_MODES_FILE="$HOME/.config/vinput_app_modes.tsv"   # 每行「bundle-id<TAB>mode」，mode ∈ raw|en
+```
+
+把 `config/vinput_app_modes.example.tsv` 复制过去，把你在用的终端取消注释即可。查某个 App 的 bundle id：先切到前台，再跑 `lsappinfo info -only bundleid "$(lsappinfo front)"`。探测用 `lsappinfo`——零新权限、~10ms、不拖慢录音起步。显式按 Raw/EN 快捷键永远优先于映射；探测失败一律静默回退默认模式。
+
 ### 剪贴板恢复
 
 ```bash

@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.10.0] — 2026-07-06
+
+Per-app mode override ([#43](https://github.com/aimer1124/local-voice-input/issues/43)): terminals get the raw transcript automatically.
+
+### Added
+- **Per-app mode override.** At the moment the hotkey is pressed, the frontmost app's bundle id is
+  matched against `~/.config/vinput_app_modes.tsv` (`bundle-id<TAB>mode`, mode ∈ `raw|en`); a hit
+  switches this round's mode — e.g. iTerm/Terminal → Raw, so terminals get the literal command
+  instead of an LLM-reshaped prompt. **Default OFF**: no mapping file = zero behavior change.
+  Detection uses `lsappinfo` (built-in, ~10ms, zero new permissions) and runs after `rec` starts,
+  so recording start is never delayed; an explicit Raw/EN hotkey always wins over the map; any
+  lookup failure silently falls back to the default mode. New `APP_MODES_FILE` knob (README
+  advanced config), `config/vinput_app_modes.example.tsv` template, `--test-app-mode` hook, and
+  five deterministic integration cases.
+
 ## [1.9.2] — 2026-07-06
 
 Fix the hotkey going dead for up to `MAX_REC_SECONDS` after a cancel — and, most likely, the long-standing "pressed the hotkey right after a take and nothing happened" mystery.
@@ -785,7 +800,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.9.2...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/aimer1124/local-voice-input/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/aimer1124/local-voice-input/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/aimer1124/local-voice-input/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/aimer1124/local-voice-input/compare/v1.8.5...v1.9.0

@@ -99,6 +99,11 @@ RECENT_PROMPT_FILE="${RECENT_PROMPT_FILE:-$HOME/.cache/vinput/recent.txt}"
 # 上下文上限（字符数）。whisper.cpp 的 prompt token 上限 ≈ 224，按中文 1 字 = 1.5 token 估算
 RECENT_PROMPT_MAX_CHARS="${RECENT_PROMPT_MAX_CHARS:-280}"
 
+# 按 App 模式覆盖（#43）：TSV 每行「bundle-id<TAB>mode」，mode ∈ raw|en。命中前台 App 时
+# 本轮自动切到对应模式（如终端里要命令原文 → raw，跳过 LLM 意图重构）。
+# 文件不存在 = 功能关闭（默认），行为零变化。显式用 Raw/EN 快捷键时不覆盖。
+APP_MODES_FILE="${APP_MODES_FILE:-$HOME/.config/vinput_app_modes.tsv}"
+
 # SoX 录音预处理（v1.1.4 #20，v1.1.7 重写）— 提升任意场景下 Whisper 输入质量
 #
 # ⚠️ v1.1.4 用 `norm -3` 做峰值归一化，但 `norm` 在 streaming rec 下会先 buffer 整段
@@ -469,6 +474,43 @@ guard_critical_tokens() {
     return 0
 }
 
+# ──────────────────────────────────────────────────────────────
+# 按 App 模式覆盖（#43）— 录音一启动就取前台 App 的 bundle id，命中 APP_MODES_FILE 里的
+# 映射则覆盖本轮模式（raw|en）。
+# - 取 bundle id 用 lsappinfo（macOS 自带，~10ms，零权限）——不走 System Events，不新增权限面。
+# - 显式用 Raw/EN 快捷键（VINPUT_RAW / VINPUT_TRANSLATE_EN 已置 1）时不覆盖：用户手选优先。
+# - 任何失败（无文件 / lsappinfo 异常 / 未命中）→ 静默走默认模式，绝不打扰。
+# 用法：app_mode_override [bundle-id]；参数仅测试钩子用，生产路径不传、现场探测。
+# ──────────────────────────────────────────────────────────────
+app_mode_override() {
+    local file="${APP_MODES_FILE:-$HOME/.config/vinput_app_modes.tsv}"
+    [ -f "$file" ] || return 0
+    [ "${VINPUT_RAW:-0}" = "1" ] && return 0
+    [ "${VINPUT_TRANSLATE_EN:-0}" = "1" ] && return 0
+
+    local bid="${1:-}"
+    if [ -z "$bid" ]; then
+        local asn
+        asn=$(lsappinfo front 2>/dev/null)
+        [ -z "$asn" ] && return 0
+        bid=$(lsappinfo info -only bundleid "$asn" 2>/dev/null \
+              | sed -n 's/.*"CFBundleIdentifier"="\([^"]*\)".*/\1/p')
+        [ -z "$bid" ] && return 0
+    fi
+
+    local id mode _rest
+    while IFS=$'\t' read -r id mode _rest || [ -n "$id" ]; do
+        case "$id" in ''|'#'*) continue ;; esac
+        [ "$id" = "$bid" ] || continue
+        case "$mode" in
+            raw) VINPUT_RAW=1;          vlog "app-mode:raw app=$bid" ;;
+            en)  VINPUT_TRANSLATE_EN=1; vlog "app-mode:en app=$bid" ;;
+        esac
+        return 0
+    done < "$file"
+    return 0
+}
+
 hud() {
     local msg="$1"
     local dur="${2:-2.0}"
@@ -558,6 +600,15 @@ if [ "${1:-}" = "--test-guard" ] && [ -n "${2:-}" ]; then
     else
         echo "drop"
     fi
+    exit 0
+fi
+
+if [ "${1:-}" = "--test-app-mode" ] && [ -n "${2:-}" ]; then
+    # tests/integration 用：喂 <bundle-id>，打印覆盖后的模式 raw|en|default（确定性，无外部依赖）。
+    app_mode_override "$2"
+    if [ "${VINPUT_TRANSLATE_EN:-0}" = "1" ]; then echo "en"
+    elif [ "${VINPUT_RAW:-0}" = "1" ]; then echo "raw"
+    else echo "default"; fi
     exit 0
 fi
 
@@ -753,6 +804,10 @@ fi
 REC_PID=$!
 echo "$REC_PID" > "$REC_PID_FILE"
 vlog "rec:start rec_pid=$REC_PID"
+
+# 按 App 模式覆盖（#43）：以「按下快捷键那一刻」的前台 App 为准（用户说话期间切窗口不改判）。
+# 放在 rec 启动之后 —— lsappinfo 的 ~10ms 不挡录音起步；放在预热之前 —— 覆盖成 raw 时跳过预热。
+app_mode_override
 
 # LLM 预热（v1.8.3）：rec 已在录音，立刻后台预加载 qwen，让模型冷加载与「说话+whisper 转写」
 # 重叠 —— 等下面转写完成时模型已常驻，clean_with_llm 走热路径（秒级），不再吃首次冷启动那十几秒。
