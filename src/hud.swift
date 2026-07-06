@@ -18,8 +18,12 @@ import Cocoa
 //   HUD_ON_UP_CMD      非空时注册全局 ↑ 监听；按 ↑ 时把整段 shell 通过 /bin/bash -c 启动
 //                      （仅在 HUD 显示期间生效）。需要系统设置 → 隐私 → 输入监控里把
 //                      hud 二进制打勾，否则首次注册会失败并打到 /tmp/vinput_debug.log。
-//   HUD_ON_ESC_CMD     非空时按 ESC 先执行该命令再关闭 HUD（同样走全局监控器 + 同样的
-//                      输入监控权限要求）。录音期间 vinput_bg.sh 用它实现「ESC 取消本轮」。
+//   HUD_ON_ESC_CMD     非空时需在 1 秒内**连按两次 ESC** 才执行该命令并关闭 HUD（同样走
+//                      全局监控器 + 同样的输入监控权限要求）。录音期间 vinput_bg.sh 用它
+//                      实现「双击 ESC 取消本轮」。为什么是双击：监控器是全局的，录音窗口
+//                      长达 45s，期间用户在其他 App 里按的 ESC（输入法收候选、vim、关弹窗）
+//                      全会被截获 —— v1.9.0 的单击版实测会静默误杀录音。第一次 ESC 只把
+//                      HUD 文案换成二次确认提示，不打断任何东西。
 //   ESC 永远立即关闭 HUD（不依赖任何权限，因为 ESC 监听走的还是全局监控器，但即使
 //   注册失败也不影响 HUD 本身的自动消失）。
 
@@ -110,8 +114,10 @@ class HUDDelegate: NSObject, NSApplicationDelegate {
     let message: String
     let duration: Double
     var window: NSWindow!
+    var label: NSTextField!
     var monitor: Any?
     var dismissed = false
+    var lastEscAt: TimeInterval = 0
 
     init(message: String, duration: Double) {
         self.message = message
@@ -164,9 +170,19 @@ class HUDDelegate: NSObject, NSApplicationDelegate {
                 }
             case 53:   // ESC
                 if !cfgOnEscCmd.isEmpty {
-                    self.spawnRerun(cfgOnEscCmd)
+                    // 双击确认（1s 窗口）：全局监控会截到发给其他 App 的 ESC，
+                    // 单击直接取消会误杀录音；连按两次才视为真想取消。
+                    let now = Date().timeIntervalSince1970
+                    if now - self.lastEscAt < 1.0 {
+                        self.spawnRerun(cfgOnEscCmd)
+                        self.dismiss()
+                    } else {
+                        self.lastEscAt = now
+                        self.label?.stringValue = "再按一次 ESC 取消录音"
+                    }
+                } else {
+                    self.dismiss()
                 }
-                self.dismiss()
             default:
                 break
             }
@@ -215,7 +231,7 @@ class HUDDelegate: NSObject, NSApplicationDelegate {
         blur.layer?.cornerRadius = cfgCornerRadius
         blur.layer?.masksToBounds = true
 
-        let label = NSTextField(labelWithString: message)
+        label = NSTextField(labelWithString: message)
         label.font = font
         label.textColor = .labelColor
         label.alignment = .center

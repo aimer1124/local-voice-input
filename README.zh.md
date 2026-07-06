@@ -401,7 +401,7 @@ SILENCE_STOP_THRESHOLD="6%"
 # HUD_SHOW_RESULT=1       # 粘贴后 HUD 显示真正粘贴的内容（截断 60 字）
 # HUD_FINAL_DURATION=2.5  # 终态停留秒数
 # HUD_RERUN_ON_UP=0       # 1=终态显示期间按 ↑ 立即重跑一次完整流水线（ESC 永远立即关闭）
-# HUD_CANCEL_ON_ESC=1     # 0=关闭。录音期间按 ESC 丢弃本轮：不转写、不粘贴、立刻可重录
+# HUD_CANCEL_ON_ESC=1     # 0=关闭。录音期间 1 秒内连按两次 ESC 丢弃本轮：不转写、不粘贴、立刻可重录
 ```
 
 > `HUD_RERUN_ON_UP=1` 与 ESC 取消都需在**系统设置 → 隐私 → 输入监控**给 hud 二进制（路径见 `vinput --doctor`）打勾。

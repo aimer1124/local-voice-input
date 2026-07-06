@@ -769,13 +769,15 @@ if [ "$REC_WARMUP_MS" -gt 0 ] 2>/dev/null; then
 fi
 afplay /System/Library/Sounds/Pop.aiff 2>/dev/null &
 
-# ESC 取消：录音期间按 ESC 丢弃本轮（不转写、不粘贴、立刻可重录）。HUD 检测到 ESC 时
-# 写 cancel 标记并 INT rec；下面 rec 停止后看到标记即清锁退出。与 ↑ 重录同一机制：需要
-# 给 hud 二进制「输入监控」权限；没给权限时 ESC 只是无效，HUD 与录音一切照常（优雅降级）。
+# ESC 取消：录音期间 1 秒内连按两次 ESC 丢弃本轮（不转写、不粘贴、立刻可重录）。HUD 确认
+# 双击后写 cancel 标记并 INT rec；下面 rec 停止后看到标记即清锁退出。为什么双击（v1.9.1）：
+# 监控是全局的、录音窗口长达 45s，单击版（v1.9.0）会把用户在其他 App 里按的 ESC（输入法
+# 收候选、vim、关弹窗）误认成取消，静默杀掉录音。与 ↑ 重录同一机制：需要给 hud 二进制
+# 「输入监控」权限；没给权限时 ESC 只是无效，HUD 与录音一切照常（优雅降级）。
 if [ "${HUD_CANCEL_ON_ESC:-1}" = "1" ]; then
     export HUD_ON_ESC_CMD="touch '$LOCK_DIR/cancel' 2>/dev/null && kill -INT $REC_PID 2>/dev/null"
 fi
-hud "🎙️ 录音中... (再按快捷键停止 · ESC 取消)" 60
+hud "🎙️ 录音中... (再按快捷键停止 · 双击ESC取消)" 60
 unset HUD_ON_ESC_CMD   # 只挂在「录音中」这一个 HUD 上，后续阶段的 HUD 不再响应 ESC 取消
 
 # 硬超时守卫：先 INT 优雅停；rec 若拒收 INT（音频设备 wedge 时会发生），3s 后 KILL 兜底。
@@ -794,9 +796,12 @@ vlog "rec:stop"
 
 # ESC 取消：HUD 在录音期间写入了 cancel 标记 → 丢弃本轮。EXIT trap 会清锁 + tmpdir，
 # 退出后立刻可开新录音。放在 Tink/「转写中」之前，取消的轮次不闪任何处理中提示。
+# 提示音 + 3s HUD（v1.9.1）：取消必须显眼 —— 无声的 1.5s 提示实测会被错过，用户
+# 误以为「录音没拉起」。
 if [ -f "$LOCK_DIR/cancel" ]; then
     vlog "exit:cancelled held=$(( $(date +%s) - LOCK_T0 ))s"
-    hud "🚫 已取消" 1.5
+    afplay /System/Library/Sounds/Bottle.aiff 2>/dev/null &
+    hud "🚫 已取消 · 未粘贴任何内容" 3
     exit 0
 fi
 
