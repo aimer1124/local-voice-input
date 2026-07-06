@@ -6,9 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
-## [Unreleased]
+## [1.9.0] — 2026-07-06
 
-Quality-of-life pass distilled from a survey of peer open-source dictation tools (VoiceInk, go-whisper, whisper-local, FreeFlow et al.); see `ROADMAP.md` backlog for the two larger follow-ups it queued.
+Quality-of-life pass distilled from a survey of peer open-source dictation tools (VoiceInk, go-whisper, whisper-local, FreeFlow et al.); the two larger follow-ups it queued are [#42](https://github.com/aimer1124/local-voice-input/issues/42) (decouple recording from processing) and [#43](https://github.com/aimer1124/local-voice-input/issues/43) (per-app mode override).
 
 ### Added
 - **ESC cancels a recording.** Press ESC while the `🎙️ 录音中` HUD is up to discard the take —
@@ -749,7 +749,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/aimer1124/local-voice-input/compare/v1.8.5...v1.9.0
 [1.5.0]: https://github.com/aimer1124/local-voice-input/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/aimer1124/local-voice-input/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/aimer1124/local-voice-input/compare/v1.2.0...v1.3.0
