@@ -401,12 +401,32 @@ SILENCE_STOP_THRESHOLD="6%"
 # HUD_SHOW_RESULT=1       # 粘贴后 HUD 显示真正粘贴的内容（截断 60 字）
 # HUD_FINAL_DURATION=2.5  # 终态停留秒数
 # HUD_RERUN_ON_UP=0       # 1=终态显示期间按 ↑ 立即重跑一次完整流水线（ESC 永远立即关闭）
+# HUD_CANCEL_ON_ESC=1     # 0=关闭。录音期间按 ESC 丢弃本轮：不转写、不粘贴、立刻可重录
 ```
 
-> `HUD_RERUN_ON_UP=1` 需在**系统设置 → 隐私 → 输入监控**给 hud 二进制（路径见 `vinput --doctor`）打勾。
-> 没给权限时 HUD 仍正常显示，只是 ↑ 无效——这是个便利功能，默认关。
+> `HUD_RERUN_ON_UP=1` 与 ESC 取消都需在**系统设置 → 隐私 → 输入监控**给 hud 二进制（路径见 `vinput --doctor`）打勾。
+> 没给权限时 HUD 仍正常显示，只是按键无效——便利功能，优雅降级。
 
 HUD 外观（位置/字号/材质等 8 项）见上方 [HUD 样式调整](#hud-样式调整)。
+
+### 剪贴板恢复
+
+```bash
+RESTORE_CLIPBOARD=1   # 0=关闭。自动粘贴成功后 ~1s 还原你之前复制的文本内容
+                      # （延迟是为了让目标 App 先读到转写结果）
+```
+
+仅纯文本：图片等非文本剪贴板内容 `pbpaste` 拿不到，不做还原。自动粘贴失败或 `AUTO_PASTE=0` 时，转写结果会特意留在剪贴板里供你手动 ⌘V。
+
+### 诊断：锁/阶段计时日志
+
+```bash
+VINPUT_LOCK_LOG=1   # 0=关闭。把状态机关键迁移（press / rec:start / transcribe:done /
+                    # llm:done / paste:done / release，含时间戳+PID）追加到
+                    # ~/.cache/vinput/lock.log
+```
+
+如果按快捷键被「⏳ 正在处理上次录音」拒绝，回看此日志即可定位是哪个阶段占着锁、占了多久。开销可忽略，常开无妨。
 
 ---
 

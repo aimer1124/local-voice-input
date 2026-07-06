@@ -6,6 +6,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.9.0] — 2026-07-06
+
+Quality-of-life pass distilled from a survey of peer open-source dictation tools (VoiceInk, go-whisper, whisper-local, FreeFlow et al.); the two larger follow-ups it queued are [#42](https://github.com/aimer1124/local-voice-input/issues/42) (decouple recording from processing) and [#43](https://github.com/aimer1124/local-voice-input/issues/43) (per-app mode override).
+
+### Added
+- **ESC cancels a recording.** Press ESC while the `🎙️ 录音中` HUD is up to discard the take —
+  no transcription, no paste, lock released immediately for a fresh start. Implemented via a new
+  `HUD_ON_ESC_CMD` hook in the hud binary (same global-monitor mechanism and Input Monitoring
+  permission as ↑-rerun; without the permission ESC is simply inert and everything else works).
+  `HUD_CANCEL_ON_ESC=0` disables. Documented in README advanced config.
+- **Clipboard restore after auto-paste.** What you had copied before dictating is put back on the
+  clipboard ~1s after a successful auto-paste, so vinput no longer eats your clipboard. Text-only
+  (`pbpaste` can't capture images); deliberately skipped when auto-paste fails or `AUTO_PASTE=0`,
+  because then the clipboard must keep the result for a manual ⌘V. `RESTORE_CLIPBOARD=0` disables.
+  Supersedes the only real win of the direct-injection idea (#12).
+- **Lock/stage timing log** for diagnosing "can't start a new recording right after the last one":
+  state-machine transitions (press / rec:start / transcribe:done / llm:done / paste:done / release)
+  appended with timestamp + PID to `~/.cache/vinput/lock.log`. `VINPUT_LOCK_LOG=0` disables.
+
+### Fixed
+- **`check-docs.sh` missed reference-style knobs.** The doc-coverage guard only scanned top-level
+  `FOO="${FOO:-…}"` assignments, so switches read inline (e.g. `${VINPUT_LOCK_LOG:-1}`) could ship
+  undocumented. It now also scans `${VINPUT_*:-}` references; Raycast-script-set and internal
+  `VINPUT_*` vars are allowlisted with reasons.
+
 ## [1.8.5] — 2026-06-23
 
 Stop a single hotkey press from looking like it did nothing when Raycast double-fires it.
@@ -724,7 +749,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/aimer1124/local-voice-input/compare/v1.8.5...v1.9.0
 [1.5.0]: https://github.com/aimer1124/local-voice-input/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/aimer1124/local-voice-input/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/aimer1124/local-voice-input/compare/v1.2.0...v1.3.0

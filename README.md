@@ -402,12 +402,34 @@ SILENCE_STOP_THRESHOLD="6%"
 # HUD_SHOW_RESULT=1       # after pasting, the HUD shows what was actually pasted (truncated to 60 chars)
 # HUD_FINAL_DURATION=2.5  # how many seconds the final state lingers
 # HUD_RERUN_ON_UP=0       # 1 = press ↑ during the final state to instantly re-run the full pipeline (ESC always closes immediately)
+# HUD_CANCEL_ON_ESC=1     # 0 = disable. Press ESC while recording to discard the take — no transcription,
+#                         # no paste, ready to re-record immediately
 ```
 
-> `HUD_RERUN_ON_UP=1` requires checking the hud binary (path via `vinput --doctor`) in **System Settings → Privacy → Input Monitoring**.
-> Without permission the HUD still displays fine, ↑ just does nothing — it's a convenience feature, off by default.
+> `HUD_RERUN_ON_UP=1` and ESC-cancel both require checking the hud binary (path via `vinput --doctor`) in **System Settings → Privacy → Input Monitoring**.
+> Without permission the HUD still displays fine, the keys just do nothing — convenience features that degrade gracefully.
 
 HUD appearance (8 knobs: position/font/material/etc.) is covered in [HUD style adjustments](#hud-style-adjustments) above.
+
+### Clipboard restore
+
+```bash
+RESTORE_CLIPBOARD=1   # 0 = disable. After a successful auto-paste, restores whatever text was on
+                      # your clipboard before vinput overwrote it (~1s delay so the target app
+                      # reads the result first)
+```
+
+Text-only: images and other non-text clipboard content can't be captured by `pbpaste`, so those are not restored. When auto-paste fails or `AUTO_PASTE=0`, the transcription result is deliberately left on the clipboard for you to paste manually.
+
+### Diagnostics: lock/stage timing log
+
+```bash
+VINPUT_LOCK_LOG=1   # 0 = disable. Appends state-machine transitions (press / rec:start /
+                    # transcribe:done / llm:done / paste:done / release, with timestamp + PID)
+                    # to ~/.cache/vinput/lock.log
+```
+
+If a hotkey press ever gets rejected with "still processing the previous recording", this log shows which stage was holding the lock and for how long. Negligible overhead; safe to leave on.
 
 ---
 

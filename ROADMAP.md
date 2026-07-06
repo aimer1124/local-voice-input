@@ -66,7 +66,9 @@ fee → real burden for a free OSS tool; (d) doubles maintenance.
 
 | Task | Issue | Verdict |
 |---|---|---|
-| Direct Unicode injection | [#12](https://github.com/aimer1124/local-voice-input/issues/12) | 🟡 Kept, not urgent — only real win is not clobbering the clipboard; CGEventPost still needs Accessibility. No fee, small native cost |
+| Direct Unicode injection | [#12](https://github.com/aimer1124/local-voice-input/issues/12) | 🟡 Superseded in practice — clipboard-restore (v1.9.0) removes its only real win (not clobbering the clipboard); CGEventPost still needs Accessibility. Close unless new evidence |
+| Decouple recording from processing (spool queue) | [#42](https://github.com/aimer1124/local-voice-input/issues/42) | 🟡 The root fix behind every v1.7.x–v1.8.x lock patch — back-to-back recording without "still processing". Data first: review `~/.cache/vinput/lock.log` (`VINPUT_LOCK_LOG`) for 1–2 weeks before committing |
+| Per-app mode override (terminal → Raw) | [#43](https://github.com/aimer1124/local-voice-input/issues/43) | 🟡 Minimal cut of VoiceInk/whisper-local's per-app rules: frontmost bundle id → optional mode map. Default OFF, zero new permissions |
 
 > **Next**: product is in a clean state after v1.6.0 — watch real user feedback before adding more, rather than piling on features.
 
@@ -145,7 +147,9 @@ P0 清零后复盘剩余项时，在[功能准入门槛](#功能准入门槛)之
 
 | 任务 | Issue | 裁决 | 理由 |
 |---|---|---|---|
-| 直接 Unicode 注入（CGEventPost） | [#12](https://github.com/aimer1124/local-voice-input/issues/12) | 🟡 **保留，不紧急** | 唯一真实收益是不污染剪贴板；但 CGEventPost 合成按键同样需辅助功能权限、不省权限面。无费用、少量原生代码成本 |
+| 直接 Unicode 注入（CGEventPost） | [#12](https://github.com/aimer1124/local-voice-input/issues/12) | 🟡 **实质被取代** | 剪贴板恢复（v1.9.0）已消掉其唯一真实收益（不污染剪贴板）；CGEventPost 仍需辅助功能权限。除非有新证据，建议关闭 |
+| 录音/处理解耦（spool 队列） | [#42](https://github.com/aimer1124/local-voice-input/issues/42) | 🟡 **数据先行** | v1.7.x–v1.8.x 全部锁补丁背后的根因修复——背靠背连续录音不再被「⏳ 正在处理上次录音」拒绝。先用 `VINPUT_LOCK_LOG`（`~/.cache/vinput/lock.log`）收集 1–2 周持锁分布再决定投入 |
+| 按 App 模式覆盖（终端 → Raw） | [#43](https://github.com/aimer1124/local-voice-input/issues/43) | 🟡 **最小裁剪** | VoiceInk/whisper-local 按 App 规则的最小版：前台 bundle id → 可选模式映射。默认关、零新权限、不进默认模板 |
 
 > **下一步**：v1.6.0 后产品处于干净状态，优先**观察实际用户反馈再定方向**，而非继续堆功能。
 
