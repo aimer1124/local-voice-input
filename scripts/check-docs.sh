@@ -24,6 +24,10 @@ INTERNAL_ALLOWLIST=(
     HISTORY_FILE         # 内部缓存路径
     HISTORY_MAX_LINES    # 内部：历史行数上限
     RECENT_PROMPT_FILE   # 内部缓存路径
+    VINPUT_LIB           # 内部：库模式守卫（vinput.sh source 时置 1），非用户旋钮
+    VINPUT_RAW           # 由 raycast/voice-input-raw.sh 设置；用户面是「Raw 模式快捷键」而非 env
+    VINPUT_TRANSLATE_EN  # 由 raycast/voice-input-en.sh 设置；同上
+    VINPUT_DEBUG_KEEP    # debug-only：保留临时音频文件排查用
 )
 
 in_allowlist() {
@@ -32,9 +36,16 @@ in_allowlist() {
     return 1
 }
 
-# All user-configurable knobs: lines like  FOO="${FOO:-default}"  → take the name before '='
-mapfile -t VARS < <(grep -E '^[A-Z_]+="?\$\{[A-Z_]+:-' "$SCRIPT" \
-                    | cut -d= -f1 | sort -u)
+# All user-configurable knobs, two shapes:
+#   1) top-level assignments  FOO="${FOO:-default}"  → take the name before '='
+#   2) inline reads of VINPUT_* switches  ${VINPUT_FOO:-default}  — these are read
+#      inside functions without a top-level assignment (e.g. VINPUT_LOCK_LOG), so
+#      shape-1 alone lets them drift undocumented. Only the VINPUT_ prefix is
+#      scanned here: unprefixed inline ${VAR:-} matches script-locals (RMS,
+#      GUARD_TRIGGERED) and shell builtins (LANG), which are not knobs.
+mapfile -t VARS < <({ grep -E '^[A-Z_]+="?\$\{[A-Z_]+:-' "$SCRIPT" | cut -d= -f1
+                      grep -oE '\$\{VINPUT_[A-Z_]+:-' "$SCRIPT" | sed 's/^\${//; s/:-$//'
+                    } | sort -u)
 
 missing=()
 for v in "${VARS[@]}"; do

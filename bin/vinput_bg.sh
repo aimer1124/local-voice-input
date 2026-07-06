@@ -38,6 +38,10 @@ SHORT_TEXT_THRESHOLD="${SHORT_TEXT_THRESHOLD:-15}"
 # 不摘要、不丢内容」的长内容模板。介于 SHORT 与 LONG 之间走常规提炼。见 clean_with_llm。
 LONG_TEXT_THRESHOLD="${LONG_TEXT_THRESHOLD:-80}"
 AUTO_PASTE="${AUTO_PASTE:-1}"
+# 粘贴成功后 ~1s 把用户原剪贴板内容还原，vinput 不再"吃掉"用户先前复制的文本。
+# 仅纯文本可还原（pbpaste 拿不到图片等非文本内容，该场景跳过还原）。
+# AUTO_PASTE=0 或自动粘贴失败时绝不还原——那时剪贴板里的结果正是用户要手动 ⌘V 的。
+RESTORE_CLIPBOARD="${RESTORE_CLIPBOARD:-1}"
 USE_VAD="${USE_VAD:-0}"
 SILENCE_TAIL="${SILENCE_TAIL:-1.5}"
 SILENCE_START_THRESHOLD="${SILENCE_START_THRESHOLD:-0.5%}"
@@ -482,6 +486,20 @@ hud() {
 }
 
 # ──────────────────────────────────────────────────────────────
+# 锁/阶段计时日志（诊断）— 把状态机的关键迁移按「时间戳 + 本进程 PID + 事件」追加到
+# ~/.cache/vinput/lock.log。每次触发快捷键 = 一个新进程 = 一个新 PID，用 PID 把同一次
+# 按键的事件链串起来。用途：当「刚录完、隔几秒再按却开不了新录音」复现时，回看日志即可
+# 定位是哪个阶段占着锁、占了多久，以及被拒的那次按键（busy）落在上一轮 release 之前还是
+# 之后 —— 前者=处理窗口串行（已知），后者=真·post-paste bug。开销可忽略；VINPUT_LOCK_LOG=0 关闭。
+# ──────────────────────────────────────────────────────────────
+LOCK_LOG_FILE="$HOME/.cache/vinput/lock.log"
+vlog() {
+    [ "${VINPUT_LOCK_LOG:-1}" = "1" ] || return 0
+    mkdir -p "$(dirname "$LOCK_LOG_FILE")" 2>/dev/null
+    printf '%s pid=%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$$" "$*" >> "$LOCK_LOG_FILE" 2>/dev/null
+}
+
+# ──────────────────────────────────────────────────────────────
 # 录音电平 (#4) — 返回 WAV 的 RMS amplitude（0–1，越大越响），无 sox/无文件返回空。
 # 只在转写为空的失败路径调用：把含糊的「未识别到有效语音」按实际电平升级成可操作
 # 提示。最典型的静默失败是插着只能听的 3 极耳机时，macOS 把输入路由到无信号的耳机口，
@@ -579,6 +597,7 @@ fi
 # 正常被 Raycast 执行时 VINPUT_LIB 未设 → 守卫为假 → 主流程照常（行为零变化）。
 [ "${VINPUT_LIB:-0}" = "1" ] && return 0 2>/dev/null
 
+LOCK_T0=$(date +%s)
 LOCK_DIR="/tmp/vinput.lock.d"
 REC_PID_FILE="$LOCK_DIR/rec.pid"
 
@@ -587,6 +606,7 @@ if mkdir "$LOCK_DIR" 2>/dev/null; then
 else
     MODE="toggle"
 fi
+vlog "press lock=$([ "$MODE" = record ] && echo free || echo held) mode=$MODE"
 
 if [ "$MODE" = "toggle" ]; then
     # Double-fire debounce (see DOUBLE_FIRE_GRACE): if the lock was created < DOUBLE_FIRE_GRACE
@@ -597,6 +617,7 @@ if [ "$MODE" = "toggle" ]; then
     LOCK_AGE_HR=$(perl -MTime::HiRes=time,stat -e \
         'my @s=stat($ARGV[0]); printf "%.3f", @s ? time-$s[9] : 999' "$LOCK_DIR" 2>/dev/null || echo 999)
     if awk "BEGIN{exit !($LOCK_AGE_HR < $DOUBLE_FIRE_GRACE)}"; then
+        vlog "toggle:double-fire-debounce age=${LOCK_AGE_HR}s"
         exit 0
     fi
 
@@ -625,6 +646,7 @@ if [ "$MODE" = "toggle" ]; then
               fi ) &
             afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &
             hud "🛑 已停止，转写中..." 60
+            vlog "toggle:stop rec_pid=$REC_PID lock_age=${LOCK_AGE}s grace=${STOP_KILL_GRACE}s"
             exit 0
         else
             # pid 已死（上次正在转写）或锁早已过期（僵尸）。若 pid 还活着且确认是 rec 进程，
@@ -637,9 +659,12 @@ if [ "$MODE" = "toggle" ]; then
             rm -rf "$LOCK_DIR"
             if ! mkdir "$LOCK_DIR" 2>/dev/null; then
                 hud "❌ 锁冲突，请重试" 2
+                vlog "toggle:reap-conflict"
                 exit 1
             fi
             MODE="record"
+            LOCK_T0=$(date +%s)
+            vlog "toggle:reap rec_pid=$REC_PID lock_age=${LOCK_AGE}s -> record"
         fi
     else
         # 无 rec.pid = 上一条正处于「转写/整形/粘贴」阶段（rec 已结束、pid 文件已删）。
@@ -651,6 +676,7 @@ if [ "$MODE" = "toggle" ]; then
         LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || date +%s) ))
         STALE_CEILING=$(( MAX_REC_SECONDS + 60 ))
         if [ "$LOCK_AGE" -le "$STALE_CEILING" ]; then
+            vlog "toggle:busy-processing lock_age=${LOCK_AGE}s rejected (no new recording)"
             hud "⏳ 正在处理上次录音" 2
             exit 0
         fi
@@ -658,9 +684,12 @@ if [ "$MODE" = "toggle" ]; then
         rm -rf "$LOCK_DIR"
         if ! mkdir "$LOCK_DIR" 2>/dev/null; then
             hud "❌ 锁冲突，请重试" 2
+            vlog "toggle:orphan-conflict"
             exit 1
         fi
         MODE="record"
+        LOCK_T0=$(date +%s)
+        vlog "toggle:orphan-reclaim lock_age=${LOCK_AGE}s -> record"
     fi
 fi
 
@@ -718,6 +747,7 @@ else
 fi
 REC_PID=$!
 echo "$REC_PID" > "$REC_PID_FILE"
+vlog "rec:start rec_pid=$REC_PID"
 
 # LLM 预热（v1.8.3）：rec 已在录音，立刻后台预加载 qwen，让模型冷加载与「说话+whisper 转写」
 # 重叠 —— 等下面转写完成时模型已常驻，clean_with_llm 走热路径（秒级），不再吃首次冷启动那十几秒。
@@ -738,7 +768,15 @@ if [ "$REC_WARMUP_MS" -gt 0 ] 2>/dev/null; then
     sleep "$(awk "BEGIN {print $REC_WARMUP_MS / 1000}")"
 fi
 afplay /System/Library/Sounds/Pop.aiff 2>/dev/null &
-hud "🎙️ 录音中... (再按快捷键停止)" 60
+
+# ESC 取消：录音期间按 ESC 丢弃本轮（不转写、不粘贴、立刻可重录）。HUD 检测到 ESC 时
+# 写 cancel 标记并 INT rec；下面 rec 停止后看到标记即清锁退出。与 ↑ 重录同一机制：需要
+# 给 hud 二进制「输入监控」权限；没给权限时 ESC 只是无效，HUD 与录音一切照常（优雅降级）。
+if [ "${HUD_CANCEL_ON_ESC:-1}" = "1" ]; then
+    export HUD_ON_ESC_CMD="touch '$LOCK_DIR/cancel' 2>/dev/null && kill -INT $REC_PID 2>/dev/null"
+fi
+hud "🎙️ 录音中... (再按快捷键停止 · ESC 取消)" 60
+unset HUD_ON_ESC_CMD   # 只挂在「录音中」这一个 HUD 上，后续阶段的 HUD 不再响应 ESC 取消
 
 # 硬超时守卫：先 INT 优雅停；rec 若拒收 INT（音频设备 wedge 时会发生），3s 后 KILL 兜底。
 # ⚠️ 没有这层 KILL，rec 会永久运行 → 锁永不释放 → 之后每次触发都被误判成「已停止，转写中」
@@ -752,11 +790,21 @@ kill "$GUARD_PID" 2>/dev/null
 wait "$GUARD_PID" 2>/dev/null
 
 rm -f "$REC_PID_FILE"
+vlog "rec:stop"
+
+# ESC 取消：HUD 在录音期间写入了 cancel 标记 → 丢弃本轮。EXIT trap 会清锁 + tmpdir，
+# 退出后立刻可开新录音。放在 Tink/「转写中」之前，取消的轮次不闪任何处理中提示。
+if [ -f "$LOCK_DIR/cancel" ]; then
+    vlog "exit:cancelled held=$(( $(date +%s) - LOCK_T0 ))s"
+    hud "🚫 已取消" 1.5
+    exit 0
+fi
 
 afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &
 hud "💭 转写中..." 30
 
 if [ ! -f "$AUDIO_PATH" ] || [ ! -s "$AUDIO_PATH" ]; then
+    vlog "exit:empty-audio"
     hud "❌ 未捕获到有效音频" 3
     exit 1
 fi
@@ -797,6 +845,7 @@ if [ -z "$RAW_RESULT" ] || [ ${#RAW_RESULT} -le 2 ]; then
         # 信号正常却没转出文字：大概率是真没说话 / 纯环境噪声，保留原提示。
         hud "❌ 未识别到有效语音" 3
     fi
+    vlog "exit:empty-transcript rms=${RMS:-NA}"
     exit 1
 fi
 
@@ -811,6 +860,7 @@ RAW_RESULT=$(apply_corrections "$RAW_RESULT")
 # 短文本阈值（v1.1.3）：用 wc -m 数字符数（中文 1 字 = 1），不再用字节数。
 # 默认 8 字 ≈ 中文短指令的下限（"删除多余文件" 6 字仍走 LLM，"取消" 2 字跳过）。
 RAW_CHARS=$(printf %s "$RAW_RESULT" | wc -m | tr -d ' ')
+vlog "transcribe:done chars=$RAW_CHARS"
 if [ "${VINPUT_TRANSLATE_EN:-0}" = "1" ]; then
     # EN 模式：说中文、要英文 prompt。必过 LLM 翻译整形 —— 忽略短文本跳过，
     # 否则 "取消" 这类短中文会原样输出中文，达不到翻英目的。优先级高于 raw / short。
@@ -837,6 +887,14 @@ if ! guard_critical_tokens "$MODE" "$RAW_RESULT" "$CLEANED_RESULT"; then
     GUARD_TRIGGERED=1
     MODE="${MODE}-guard"
 fi
+vlog "llm:done mode=$MODE"
+
+# 剪贴板恢复（#12 的零成本替代）：pbcopy 前先暂存用户剪贴板。只在会自动粘贴时暂存 ——
+# AUTO_PASTE=0 时结果本身就该留在剪贴板里。
+SAVED_CLIPBOARD=""
+if [ "$RESTORE_CLIPBOARD" = "1" ] && [ "$AUTO_PASTE" = "1" ]; then
+    SAVED_CLIPBOARD=$(pbpaste 2>/dev/null || true)
+fi
 
 printf '%s' "$CLEANED_RESULT" | pbcopy
 
@@ -852,6 +910,14 @@ if [ "$AUTO_PASTE" = "1" ]; then
             *-1719*|*assistive*) AX_DENIED=1 ;;
         esac
     fi
+fi
+vlog "paste:done auto_paste=$AUTO_PASTE ax_denied=$AX_DENIED"
+
+# 剪贴板恢复：⌘V 已发出且未被权限拒绝 → 延迟 1s（等目标 App 真正读完剪贴板）后台还原。
+# 粘贴失败（AX_DENIED）时跳过：用户此刻需要剪贴板里是转写结果，好手动 ⌘V。
+if [ -n "$SAVED_CLIPBOARD" ] && [ "$AUTO_PASTE" = "1" ] && [ "$AX_DENIED" = "0" ]; then
+    ( sleep 1; printf '%s' "$SAVED_CLIPBOARD" | pbcopy ) &
+    disown 2>/dev/null
 fi
 
 # ── HUD 终态（#23）：先显示结果、释放锁，再做不占锁的记账 ──────────────
@@ -890,6 +956,7 @@ fi
 # 终态已显示、文本已粘贴 —— 用户此刻就能再次录音，不必等下面的 recent/history 记账。
 # 以前锁在脚本退出（记账之后）才释放，紧接着按快捷键会撞「⏳ 正在处理上次录音」。
 # 手动释放后 re-arm EXIT trap：退出时只清自己的 tmpdir，绝不误删「新一轮录音」刚建的锁。
+vlog "release held=$(( $(date +%s) - LOCK_T0 ))s mode=$MODE"
 rm -rf "$LOCK_DIR"
 trap 'rm -rf "$TMPDIR_RUN"' EXIT
 

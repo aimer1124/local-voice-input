@@ -18,6 +18,8 @@ import Cocoa
 //   HUD_ON_UP_CMD      非空时注册全局 ↑ 监听；按 ↑ 时把整段 shell 通过 /bin/bash -c 启动
 //                      （仅在 HUD 显示期间生效）。需要系统设置 → 隐私 → 输入监控里把
 //                      hud 二进制打勾，否则首次注册会失败并打到 /tmp/vinput_debug.log。
+//   HUD_ON_ESC_CMD     非空时按 ESC 先执行该命令再关闭 HUD（同样走全局监控器 + 同样的
+//                      输入监控权限要求）。录音期间 vinput_bg.sh 用它实现「ESC 取消本轮」。
 //   ESC 永远立即关闭 HUD（不依赖任何权限，因为 ESC 监听走的还是全局监控器，但即使
 //   注册失败也不影响 HUD 本身的自动消失）。
 
@@ -54,6 +56,7 @@ let cfgMaterial      = envString("HUD_MATERIAL", "hudWindow")
 let cfgWidthMin      = CGFloat(envInt("HUD_WIDTH_MIN", 220))
 let cfgWidthMax      = CGFloat(envInt("HUD_WIDTH_MAX", 900))
 let cfgOnUpCmd       = envString("HUD_ON_UP_CMD", "")
+let cfgOnEscCmd      = envString("HUD_ON_ESC_CMD", "")
 
 func fontWeight(_ name: String) -> NSFont.Weight {
     switch name.lowercased() {
@@ -147,17 +150,22 @@ class HUDDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupKeyboardMonitor() {
-        // 只有 cfgOnUpCmd 非空时才注册 ↑ 监听；ESC 监听跟着开（顺手）。
+        // cfgOnUpCmd / cfgOnEscCmd 任一非空才注册监听；两者都空时不占全局监控器。
         // NSEvent.addGlobalMonitorForEvents 在没拿到 Input Monitoring 权限时返回 nil —
         // 写到 stderr（最后会被 vinput_debug.log 兜住）然后跳过，不影响 HUD 显示。
-        if cfgOnUpCmd.isEmpty { return }
+        if cfgOnUpCmd.isEmpty && cfgOnEscCmd.isEmpty { return }
         monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, !self.dismissed else { return }
             switch event.keyCode {
             case 126:  // ↑
-                self.spawnRerun(cfgOnUpCmd)
-                self.dismiss()
+                if !cfgOnUpCmd.isEmpty {
+                    self.spawnRerun(cfgOnUpCmd)
+                    self.dismiss()
+                }
             case 53:   // ESC
+                if !cfgOnEscCmd.isEmpty {
+                    self.spawnRerun(cfgOnEscCmd)
+                }
                 self.dismiss()
             default:
                 break
