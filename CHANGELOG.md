@@ -6,6 +6,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.11.0] — 2026-07-07
+
+Default LLM upgraded to `qwen3:4b-instruct` after a measured bake-off ([#48](https://github.com/aimer1124/local-voice-input/issues/48)) — attacks the 4% number-guard fallback rate observed in 212 field takes.
+
+### Changed
+- **Default `OLLAMA_MODEL`: `qwen2.5:3b` → `qwen3:4b-instruct`.** Bake-off across four candidates
+  (7-case faithfulness suite + 5-run hot-path latency + EN sample + 3 hard ad-hoc probes):
+
+  | Model | Faithfulness | Hot latency (median) | Notes |
+  |---|---|---|---|
+  | `qwen2.5:3b` (old default) | 7/7 | 0.35s | probes: dropped a whole "don't ship yet" clause + a "not NULL" negation |
+  | `qwen3:1.7b` | 6/7 | 0.25s | dropped "map"; EN sample mistranslated; leaks `输出:` prefixes |
+  | `qwen3:4b` (thinking build) | 2/7 | 60s (timeout) | reasons in-response despite `think:false` — unusable |
+  | **`qwen3:4b-instruct`** | **7/7** | **0.29s** | **probes all faithful; best EN sample — winner** |
+
+  The winner is faster on the hot path, more faithful on exactly the failure class the
+  numbers-only guard can't catch (dropped negations/clauses), and better at EN translation.
+  Cost: 2.5GB vs 1.9GB on disk. `qwen2.5:3b` remains a documented fallback.
+- **All Ollama calls now pass `think:false`** (reshape, EN translate, warmup): qwen3-class
+  thinking models otherwise generate a full reasoning pass before answering (2×+ hot-path
+  latency). Non-thinking models ignore the field — harmless. ⚠️ README warns that bare
+  `qwen3:4b` (thinking-only build) ignores `think:false` and must not be used.
+- README model-recommendation tables rebuilt around measured data; install size notes 2→2.5GB.
+
 ## [1.10.0] — 2026-07-06
 
 Per-app mode override ([#43](https://github.com/aimer1124/local-voice-input/issues/43)): terminals get the raw transcript automatically.
@@ -800,7 +824,8 @@ UX polish milestone — demo, diagnostics, configurable HUD.
 
 ---
 
-[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/aimer1124/local-voice-input/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/aimer1124/local-voice-input/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/aimer1124/local-voice-input/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/aimer1124/local-voice-input/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/aimer1124/local-voice-input/compare/v1.9.0...v1.9.1

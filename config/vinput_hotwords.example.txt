@@ -1,4 +1,4 @@
-使用 Whisper 和 Ollama 做本地语音转写，用 qwen2.5 模型整形 prompt。
+使用 Whisper 和 Ollama 做本地语音转写，用 qwen3 模型整形 prompt。
 常用技术栈：React、TypeScript、Python、Node.js、Go、Rust、PostgreSQL、MySQL、Redis、SQLite、MongoDB、Docker、Kubernetes。
 开发工具：Cursor、Claude Code、Codex、GitHub、GitLab、Raycast、ChatGPT、Playwright、Puppeteer、Git。
 开发概念：const、function、async、await、Promise、prompt、embedding、RAG、LLM、API、URL、JSON、YAML。

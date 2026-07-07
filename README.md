@@ -54,7 +54,7 @@ Press ⌘⇧Space again          ← Tink sound
 ┌────────────────────────────┐
 │  🤖 Polishing with AI...    │
 └────────────────────────────┘
-       │  ↓ Ollama (qwen2.5:3b) distills intent
+       │  ↓ Ollama (qwen3:4b-instruct) distills intent
        │  ↓ pbcopy + osascript ⌘V
        ▼
 ┌────────────────────────────┐
@@ -185,7 +185,7 @@ vinput setup
 3. Symlink `vinput / vinput.sh / vinput_bg.sh / hud` into `~/.whisper_models/`
 4. Write the default config `~/.config/vinput.conf` + hotword list
 5. Deploy the Raycast command script to `~/.config/raycast-scripts/`
-6. Start the Ollama service, pull `qwen2.5:3b` (~2GB), and pre-warm it
+6. Start the Ollama service, pull `qwen3:4b-instruct` (~2.5GB), and pre-warm it
 
 Upgrade with `brew upgrade local-voice-input` (the scripts are symlinks, so they follow the version automatically).
 
@@ -276,7 +276,7 @@ MODEL_PATH="$HOME/.whisper_models/ggml-large-v3-turbo-q5_0.bin"
 WHISPER_LANG="zh"              # mixed CN/EN is guided by the hotword prompt
 
 # === Ollama LLM refinement ===
-OLLAMA_MODEL="qwen2.5:3b"
+OLLAMA_MODEL="qwen3:4b-instruct"
 OLLAMA_URL="http://localhost:11434"
 OLLAMA_TIMEOUT=15              # LLM call timeout (s); on timeout, paste raw transcript instead of hanging. Raise on slow cold-loads
 OLLAMA_WARMUP=1               # 1 = preload the model in the background when recording starts, so the LLM step is warm by the time transcription finishes (kills the "can't re-record for ~15s after the first take" stall). 0 to disable
@@ -570,14 +570,19 @@ To inspect config and entrypoint structure without touching Ollama or the microp
 
 | Model | Speed | Refinement quality |
 |---|---|---|
-| `qwen2.5:1.5b` | ⚡⚡⚡ | so-so |
-| **`qwen2.5:3b`** | **⚡⚡** | **balanced (recommended)** |
-| `qwen2.5:7b` | ⚡ | stronger |
-| `gemma2:2b` | ⚡⚡⚡ | alternative choice |
+| `qwen3:1.7b` | ⚡⚡⚡ | so-so (measured: occasionally drops words, 6/7 on the faithfulness suite) |
+| **`qwen3:4b-instruct`** | **⚡⚡** | **balanced (recommended, default since v1.11.0; 7/7 faithfulness)** |
+| `qwen2.5:3b` | ⚡⚡ | previous default (≤ v1.10), works as a fallback |
+| `qwen3:8b` | ⚡ | stronger (untested) |
+
+> ⚠️ For qwen3, use the **`-instruct`** variants. Bare `qwen3:4b` is the thinking build — it
+> reasons at length before answering and blows straight through the hot-path timeout in our
+> measurements. The pipeline passes `think:false` on every call, but thinking-only builds
+> ignore it.
 
 ```bash
-ollama pull qwen2.5:1.5b
-# then set OLLAMA_MODEL="qwen2.5:1.5b" in ~/.config/vinput.conf
+ollama pull qwen3:1.7b
+# then set OLLAMA_MODEL="qwen3:1.7b" in ~/.config/vinput.conf
 ```
 
 ---

@@ -54,7 +54,7 @@
 ┌────────────────────────────┐
 │  🤖 AI 润色中...            │
 └────────────────────────────┘
-       │  ↓ Ollama (qwen2.5:3b) 提炼意图
+       │  ↓ Ollama (qwen3:4b-instruct) 提炼意图
        │  ↓ pbcopy + osascript ⌘V
        ▼
 ┌────────────────────────────┐
@@ -185,7 +185,7 @@ vinput setup
 3. 把 `vinput / vinput.sh / vinput_bg.sh / hud` 软链到 `~/.whisper_models/`
 4. 写入默认配置 `~/.config/vinput.conf` + 热词词表
 5. 部署 Raycast 命令脚本到 `~/.config/raycast-scripts/`
-6. 启动 Ollama 服务 + 拉取 `qwen2.5:3b`（~2GB）+ 预热
+6. 启动 Ollama 服务 + 拉取 `qwen3:4b-instruct`（~2.5GB）+ 预热
 
 升级：`brew upgrade local-voice-input`（脚本是 symlink，自动跟随版本）。
 
@@ -275,7 +275,7 @@ MODEL_PATH="$HOME/.whisper_models/ggml-large-v3-turbo-q5_0.bin"
 WHISPER_LANG="zh"              # 中英混读靠热词 prompt 引导
 
 # === Ollama LLM 润色 ===
-OLLAMA_MODEL="qwen2.5:3b"
+OLLAMA_MODEL="qwen3:4b-instruct"
 OLLAMA_URL="http://localhost:11434"
 OLLAMA_TIMEOUT=15              # LLM 调用超时（秒）；超时则粘贴原始转写而非无限挂起。冷加载慢的机器调大
 OLLAMA_WARMUP=1               # 1 = 录音一开始就后台预加载模型，等转写完成时 LLM 已热（消除「第一次录完约 15 秒内开不了新录音」的卡顿）；0 关闭
@@ -560,14 +560,18 @@ RUN_LLM=1 RUN_ASR=1 bash scripts/preflight.sh
 
 | 模型 | 速度 | 润色质量 |
 |---|---|---|
-| `qwen2.5:1.5b` | ⚡⚡⚡ | 一般 |
-| **`qwen2.5:3b`** | **⚡⚡** | **平衡（推荐）** |
-| `qwen2.5:7b` | ⚡ | 更强 |
-| `gemma2:2b` | ⚡⚡⚡ | 替代选择 |
+| `qwen3:1.7b` | ⚡⚡⚡ | 一般（实测偶发吞词，忠实度回归 6/7） |
+| **`qwen3:4b-instruct`** | **⚡⚡** | **平衡（推荐，v1.11.0 起默认；忠实度回归 7/7）** |
+| `qwen2.5:3b` | ⚡⚡ | 旧默认（v1.10 及之前），可作回退 |
+| `qwen3:8b` | ⚡ | 更强（未实测） |
+
+> ⚠️ qwen3 必须用 **`-instruct`** 变体。不带后缀的 `qwen3:4b` 是思考（thinking）构建，
+> 会先生成整段推理再答题——实测热路径直接撞 60s 超时，完全不可用。管线已对所有调用
+> 传 `think:false`，但思考构建不吃这个参数。
 
 ```bash
-ollama pull qwen2.5:1.5b
-# 然后改 ~/.config/vinput.conf 里的 OLLAMA_MODEL="qwen2.5:1.5b"
+ollama pull qwen3:1.7b
+# 然后改 ~/.config/vinput.conf 里的 OLLAMA_MODEL="qwen3:1.7b"
 ```
 
 ---
