@@ -20,7 +20,7 @@ VINPUT_LIB=1 source "$SELF_DIR/vinput_bg.sh" ""
 if [ -f "$HOTWORDS_FILE" ]; then
     HOTWORDS=$(cat "$HOTWORDS_FILE")
 else
-    HOTWORDS="使用 Whisper 和 Ollama 做语音转写，用 qwen2.5 整形 prompt。常用工具 Raycast、Claude、Cursor、Codex、Git、GitHub。"
+    HOTWORDS="使用 Whisper 和 Ollama 做语音转写，用 qwen3 整形 prompt。常用工具 Raycast、Claude、Cursor、Codex、Git、GitHub。"
 fi
 
 # 并发锁（与主路径同一把锁，互斥）

@@ -20,7 +20,7 @@ CONFIG_FILE="$HOME/.config/vinput.conf"
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
 MODEL_PATH="${MODEL_PATH:-$HOME/.whisper_models/ggml-large-v3-turbo-q5_0.bin}"
-OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:3b}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3:4b-instruct}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 # LLM 整形调用(curl)的总超时秒数。ollama 卡死/正在重载模型时，超时即放弃整形，
 # 回退粘贴「原始转写」，避免整条流水线无限挂起（曾因 ollama 后端损坏卡死 >4 分钟，
@@ -319,11 +319,14 @@ clean_with_llm() {
 输出:"
     fi
 
+    # think:false（#48）：qwen3 一类思考模型默认先生成整段思考再答题，热路径延迟成倍增加；
+    # 关掉思考对整形质量无影响（回归套件验证）。非思考模型（qwen2.5 等）忽略此字段，无害。
+    # clean_with_llm_en 与录音预热的 payload 同样带此字段。
     payload=$(jq -n \
         --arg model "$OLLAMA_MODEL" \
         --arg prompt "$llm_prompt" \
         --arg keep_alive "30m" \
-        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive, options:{temperature:0}}')
+        '{model:$model, prompt:$prompt, stream:false, think:false, keep_alive:$keep_alive, options:{temperature:0}}')
 
     # --max-time 兜底：ollama 卡死/重载时不会无限等待；超时→空响应→下方回退到原始转写。
     response_json=$(curl -s --connect-timeout 5 --max-time "$OLLAMA_TIMEOUT" \
@@ -410,7 +413,7 @@ clean_with_llm_en() {
         --arg model "$OLLAMA_MODEL" \
         --arg prompt "$llm_prompt" \
         --arg keep_alive "30m" \
-        '{model:$model, prompt:$prompt, stream:false, keep_alive:$keep_alive, options:{temperature:0}}')
+        '{model:$model, prompt:$prompt, stream:false, think:false, keep_alive:$keep_alive, options:{temperature:0}}')
 
     # --max-time 兜底：ollama 卡死/重载时不会无限等待；超时→空响应→下方回退到原始转写。
     response_json=$(curl -s --connect-timeout 5 --max-time "$OLLAMA_TIMEOUT" \
@@ -431,7 +434,7 @@ clean_with_llm_en() {
 # ──────────────────────────────────────────────────────────────
 # 关键 token 丢失守卫（v1.8.0，v1.8.1 收窄为「仅数字」）— LLM 整形后、粘贴前的确定性兜底。
 #
-# clean_with_llm 的硬规则「保留数字」只是对模型的请求；qwen2.5:3b 在长输入上会静默吞掉数字
+# clean_with_llm 的硬规则「保留数字」只是对模型的请求；qwen2.5:3b（v1.11.0 前的默认）在长输入上会静默吞掉数字
 # （「5 个」→「几个」）。这里核对 raw（纠错后转写）里的阿拉伯数字是否仍在 cleaned 里；丢失 →
 # 返回 1，调用方回退到「纠错后的原文」并给 HUD 警告。
 #
@@ -758,7 +761,7 @@ trap 'rm -rf "$LOCK_DIR" "$TMPDIR_RUN"' EXIT
 if [ -f "$HOTWORDS_FILE" ]; then
     HOTWORDS=$(cat "$HOTWORDS_FILE")
 else
-    HOTWORDS="使用 Whisper 和 Ollama 做语音转写，用 qwen2.5 整形 prompt。常用工具 Raycast、Claude、Cursor、Codex、Git、GitHub。"
+    HOTWORDS="使用 Whisper 和 Ollama 做语音转写，用 qwen3 整形 prompt。常用工具 Raycast、Claude、Cursor、Codex、Git、GitHub。"
 fi
 
 # 动态 prompt 拼接（v1.1.4 #17）：最近成功转写做 Whisper 短期记忆。
@@ -816,7 +819,7 @@ app_mode_override
 # fire-and-forget：连不上/超时都静默放弃，绝不阻塞或影响录音。RAW 模式不过 LLM → 跳过。
 if [ "${OLLAMA_WARMUP:-1}" = "1" ] && [ "${VINPUT_RAW:-0}" != "1" ]; then
     warmup_payload=$(jq -n --arg model "$OLLAMA_MODEL" --arg keep_alive "30m" \
-        '{model:$model, prompt:"", stream:false, keep_alive:$keep_alive}')
+        '{model:$model, prompt:"", stream:false, think:false, keep_alive:$keep_alive}')
     ( curl -s --connect-timeout 2 --max-time "$OLLAMA_TIMEOUT" \
         -X POST "$OLLAMA_URL/api/generate" \
         -H "Content-Type: application/json" \

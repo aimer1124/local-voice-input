@@ -68,7 +68,7 @@ Ordered by recommended sequence; grounded in 212 field takes (2026-05-29 → 07-
 
 | # | Task | Issue | Why / gate |
 |---|---|---|---|
-| 1 | LLM model refresh eval (qwen2.5:3b → qwen3-class) | [#48](https://github.com/aimer1124/local-voice-input/issues/48) | Attacks the measured 4% guard-fallback rate; regression suites make it an afternoon. **Do first** |
+| 1 | LLM model refresh eval (qwen2.5:3b → qwen3-class) | [#48](https://github.com/aimer1124/local-voice-input/issues/48) | ✅ Shipped in v1.11.0 — default is now `qwen3:4b-instruct` (7/7 faithfulness, 0.29s hot path, wins the dropped-negation probes); watch guard-fallback rate in history |
 | 2 | Corrections-mining reminder | [#49](https://github.com/aimer1124/local-voice-input/issues/49) | Table nearly empty (1 hit / 212 takes); `--suggest` exists, only the trigger is missing. Small |
 | 3 | Edit mode: select text + spoken rewrite | [#50](https://github.com/aimer1124/local-voice-input/issues/50) | Natural second half of prompt dictation; zero new permissions. After #48 (rewrite quality rides on the model) |
 | 4 | Continuous dictation (append & re-reshape) | [#51](https://github.com/aimer1124/local-voice-input/issues/51) | p90=81 chars → long asks are multi-take; trigger design is the hard part, default OFF. After #50 |
@@ -160,7 +160,7 @@ P0 清零后复盘剩余项时，在[功能准入门槛](#功能准入门槛)之
 
 | 序 | 任务 | Issue | 依据 / 门槛 |
 |---|---|---|---|
-| 1 | LLM 模型升级评测（qwen2.5:3b → qwen3 档） | [#48](https://github.com/aimer1124/local-voice-input/issues/48) | 直接打击实测 4% 守卫回退率；回归套件现成，一个下午。**最先做** |
+| 1 | LLM 模型升级评测（qwen2.5:3b → qwen3 档） | [#48](https://github.com/aimer1124/local-voice-input/issues/48) | ✅ **v1.11.0 已交付**——默认换为 `qwen3:4b-instruct`（忠实度 7/7、热路径 0.29s、探针不吞否定）；后续观察 history 守卫回退率 |
 | 2 | 纠错表挖掘提醒 | [#49](https://github.com/aimer1124/local-voice-input/issues/49) | 表近乎空（212 条只命中 1 次）；`--suggest` 已有，只缺触发时机。小活 |
 | 3 | 口述改写模式（选中文本 + 口述指令） | [#50](https://github.com/aimer1124/local-voice-input/issues/50) | 口述 prompt 的天然下半场；零新权限。排 #48 之后（改写质量吃模型） |
 | 4 | 连续口述（补一句合并重构） | [#51](https://github.com/aimer1124/local-voice-input/issues/51) | p90=81 字 → 长需求多为分次说；触发判定是难点，默认关起步。排 #50 之后 |

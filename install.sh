@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.10.0"
+VERSION="1.11.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,7 +14,7 @@ RAYCAST_DIR="$HOME/.config/raycast-scripts"
 
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
-OLLAMA_MODEL="qwen2.5:3b"
+OLLAMA_MODEL="qwen3:4b-instruct"
 HUD_RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}/hud"
 
 # ── 颜色输出 ─────────────────────────────────────────
@@ -42,7 +42,7 @@ local-voice-input 安装脚本 (v$VERSION)
 
 选项:
   --dry-run        只做只读的环境检查，打印将要执行的动作，不下载 / 不写任何文件
-  --skip-models    跳过 Whisper (~550MB) 与 Ollama (~2GB) 模型下载
+  --skip-models    跳过 Whisper (~550MB) 与 Ollama (~2.5GB) 模型下载
                    （离线机：假设模型已用 USB 拷到 ~/.whisper_models / ollama）
   --upgrade-only   只更新运行时脚本和 HUD，跳过依赖安装与模型下载（二次安装 / 升级用）
   -h, --help       显示本帮助并退出
@@ -161,9 +161,9 @@ else
     elif ollama list 2>/dev/null | grep -q "$OLLAMA_MODEL"; then
         ok "$OLLAMA_MODEL 已就绪"
     elif [ "$DRY_RUN" = "1" ]; then
-        echo -e "${CYAN}[dry-run]${NC} 将拉取 $OLLAMA_MODEL (约 2GB)"
+        echo -e "${CYAN}[dry-run]${NC} 将拉取 $OLLAMA_MODEL (约 2.5GB)"
     else
-        warn "拉取 $OLLAMA_MODEL (约 2GB)..."
+        warn "拉取 $OLLAMA_MODEL (约 2.5GB)..."
         ollama pull "$OLLAMA_MODEL"
     fi
 fi
