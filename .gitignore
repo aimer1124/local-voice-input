@@ -28,5 +28,8 @@ config/vinput_hotwords.txt
 *~
 .venv-tools/
 
+# Agent 本地个人设置（skills 本身入库共享，个人权限/设置不入库）
+.claude/settings.local.json
+
 # 回归测试音频（由 tests/asr/generate.sh 重新生成）
 tests/asr/samples/*.wav
