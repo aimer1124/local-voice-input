@@ -23,6 +23,7 @@ OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$CONFIG_DIR/vinput_hotwords.txt}"
 CORRECTIONS_FILE="${CORRECTIONS_FILE:-$CONFIG_DIR/vinput_corrections.tsv}"
 HISTORY_FILE="${HISTORY_FILE:-$HOME/.cache/vinput/history.jsonl}"
+SUGGEST_STATE_FILE="${SUGGEST_STATE_FILE:-$HOME/.cache/vinput/suggest_state}"
 HUD_BIN="${HUD_BIN:-$WHISPER_DIR/hud}"
 RAYCAST_DIR="${RAYCAST_DIR:-$CONFIG_DIR/raycast-scripts}"
 
@@ -659,7 +660,18 @@ cmd_corrections_suggest() {
     fi
     local total
     total=$(printf '%s\n' "$hist" | grep -c . )
-
+    
+    # 挖掘提醒状态重置（#49）：成功扫到历史 → 重置 baseline=当前行数、prompted=0。
+    # 失败静默：重置是附加功能，不影响 suggest 主职责。
+    if [ -f "$HISTORY_FILE" ]; then
+        local current_lines
+        current_lines=$(wc -l < "$HISTORY_FILE" 2>/dev/null | tr -d ' ') 2>/dev/null || current_lines=0
+        if [ "$current_lines" -gt 0 ]; then
+            mkdir -p "$(dirname "$SUGGEST_STATE_FILE")" 2>/dev/null
+            # 状态文件格式：第 1 行 baseline_lines，第 2 行 prompted (0/1)
+            printf '%s\n%s\n' "$current_lines" "0" > "$SUGGEST_STATE_FILE" 2>/dev/null || true
+        fi
+    fi
     # ── 1. 规则命中健康度 ──
     section "纠错规则命中（扫了 $total 条历史）"
     local fired

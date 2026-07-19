@@ -24,6 +24,8 @@ INTERNAL_ALLOWLIST=(
     HISTORY_FILE         # 内部缓存路径
     HISTORY_MAX_LINES    # 内部：历史行数上限
     RECENT_PROMPT_FILE   # 内部缓存路径
+    SUGGEST_REMINDER_THRESHOLD  # 内部：挖掘提醒阈值（#49），固定 100 条新记录
+    SUGGEST_STATE_FILE   # 内部：挖掘提醒状态文件路径（#49）
     VINPUT_LIB           # 内部：库模式守卫（vinput.sh source 时置 1），非用户旋钮
     VINPUT_RAW           # 由 raycast/voice-input-raw.sh 设置；用户面是「Raw 模式快捷键」而非 env
     VINPUT_TRANSLATE_EN  # 由 raycast/voice-input-en.sh 设置；同上
