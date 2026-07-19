@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.12.0] — 2026-07-19
+
+Mining reminder for the corrections table ([#49](https://github.com/aimer1124/local-voice-input/issues/49)) — the tool now nudges you to harvest new correction rules once enough real usage accumulates, closing the loop on the data-driven corrections workflow.
+
+### Added
+- **Mining reminder**: once `history.jsonl` accumulates ≥100 new lines since the last harvest, the
+  final HUD appends ` · 💡 跑 vinput corrections --suggest` (shown once). Running
+  `vinput corrections --suggest` resets the counter. State lives in an internal two-line file
+  (`~/.cache/vinput/suggest_state`); zero new config knobs; measured hot-path cost ~3ms; every
+  failure path degrades to "no reminder" — the core loop is never blocked.
+- **Agent workflow onboarding**: `AGENTS.md` (project constitution), `CONTEXT.md` (domain glossary +
+  hard-won lessons H1–H7), `docs/agents/` conventions, and nine engineering skills under
+  `.claude/skills/` (pinned by `skills-lock.json`). #49 was implemented end-to-end through this
+  workflow (spec → tickets → implement → regression → review) as its pilot.
+
 ## [1.11.0] — 2026-07-07
 
 Default LLM upgraded to `qwen3:4b-instruct` after a measured bake-off ([#48](https://github.com/aimer1124/local-voice-input/issues/48)) — attacks the 4% number-guard fallback rate observed in 212 field takes.
