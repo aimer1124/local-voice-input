@@ -40,9 +40,10 @@ pgrep -lf "vinput|rec -q|ollama"            # rec / Ollama / Whisper process tre
 ### Adding a config option
 
 Docs are hand-maintained, so when you add a `FOO="${FOO:-default}"` knob to `bin/vinput_bg.sh`,
-document it in a README (Configuration or Advanced Configuration) or in `config/vinput.conf.example`
-— otherwise `scripts/check-docs.sh` (run by `scripts/preflight.sh`) fails. Deliberately internal /
-debug-only vars go on that script's short `INTERNAL_ALLOWLIST` with a one-line reason.
+document it in README's Configuration section, in [docs/configuration-advanced.md](./docs/configuration-advanced.md)
+(+ its `.zh.md` counterpart), or in `config/vinput.conf.example` — otherwise `scripts/check-docs.sh`
+(run by `scripts/preflight.sh`) fails. Deliberately internal/debug-only vars go on that script's
+short `INTERNAL_ALLOWLIST` with a one-line reason.
 
 ## 📝 Commit style
 

@@ -5,7 +5,7 @@
 #
 # 还想调 Whisper 解码内参、SoX 滤波、动态 prompt、HUD 样式/重录等进阶项？
 # 这些默认值已针对「中文 + 程序员场景」调优，一般不用动。
-# 需要时见 README「进阶配置」：https://github.com/aimer1124/local-voice-input#-进阶配置
+# 需要时见 docs/configuration-advanced.zh.md
 
 # ===== Whisper ASR =====
 MODEL_PATH="$HOME/.whisper_models/ggml-large-v3-turbo-q5_0.bin"

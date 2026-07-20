@@ -1,18 +1,20 @@
 #!/bin/bash
 # Doc-coverage guard: every user-configurable env var in bin/vinput_bg.sh must be
 # mentioned in at least one of the doc surfaces (README.md / README.zh.md /
-# config/vinput.conf.example), OR be on the INTERNAL allowlist below.
+# config/vinput.conf.example / docs/configuration-advanced.md / docs/configuration-advanced.zh.md),
+# OR be on the INTERNAL allowlist below.
 #
 # Why: docs here are hand-maintained (no generator). This catches the common drift —
 # someone adds a `FOO="${FOO:-...}"` knob and forgets to document it. Runs in preflight.
 #
-# Add a new knob → document it (README or conf example) OR, if it's a deliberately
-# internal/debug var, add it to INTERNAL_ALLOWLIST with a reason.
+# Add a new knob → document it (README, docs/configuration-advanced.md, or conf example) OR,
+# if it's a deliberately internal/debug var, add it to INTERNAL_ALLOWLIST with a reason.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$ROOT/bin/vinput_bg.sh"
-DOCS=("$ROOT/README.md" "$ROOT/README.zh.md" "$ROOT/config/vinput.conf.example")
+DOCS=("$ROOT/README.md" "$ROOT/README.zh.md" "$ROOT/config/vinput.conf.example" \
+      "$ROOT/docs/configuration-advanced.md" "$ROOT/docs/configuration-advanced.zh.md")
 
 # Deliberately undocumented (internal plumbing / debug-only). Keep this list short and
 # justified — anything user-facing belongs in the docs, not here.
