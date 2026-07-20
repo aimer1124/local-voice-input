@@ -6,7 +6,7 @@
 
 set -u
 
-VERSION="1.12.0"
+VERSION="1.13.0"
 GITHUB_REPO="aimer1124/local-voice-input"
 WHISPER_MODEL_NAME="ggml-large-v3-turbo-q5_0.bin"
 WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_NAME}"
@@ -20,6 +20,7 @@ CONFIG_FILE="$CONFIG_DIR/vinput.conf"
 MODEL_PATH="${MODEL_PATH:-$WHISPER_DIR/ggml-large-v3-turbo-q5_0.bin}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3:4b-instruct}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
+WHISPER_ZH_SIMPLIFY="${WHISPER_ZH_SIMPLIFY:-1}"
 HOTWORDS_FILE="${HOTWORDS_FILE:-$CONFIG_DIR/vinput_hotwords.txt}"
 CORRECTIONS_FILE="${CORRECTIONS_FILE:-$CONFIG_DIR/vinput_corrections.tsv}"
 HISTORY_FILE="${HISTORY_FILE:-$HOME/.cache/vinput/history.jsonl}"
@@ -232,6 +233,18 @@ EOF
             ((fails++))
         fi
     done
+
+    # opencc 是可选依赖：只服务 WHISPER_ZH_SIMPLIFY（繁→简归一），缺失时脚本本身会静默
+    # 跳过转换（见 vinput_bg.sh 的 to_simplified），这里给出可见提示，不计入 fails。
+    if [ "$WHISPER_ZH_SIMPLIFY" = "1" ]; then
+        if path=$(command -v opencc 2>/dev/null); then
+            ok "opencc $path"
+        else
+            warn "opencc — 未安装，繁→简归一（WHISPER_ZH_SIMPLIFY=1）已静默跳过"
+            hint "brew install opencc"
+            ((warns++))
+        fi
+    fi
 
     check_runtime_layout fails warns
     check_raycast_scripts fails warns

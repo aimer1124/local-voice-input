@@ -6,6 +6,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and thi
 
 ---
 
+## [1.13.0] — 2026-07-20
+
+Traditional-Chinese leakage fix — Whisper's `-l zh` selects the language branch, not the script, and `ggml-large-v3-turbo-q5_0.bin`'s training mix regularly emits Traditional glyphs regardless of the speaker's accent or wording. Nothing downstream (corrections table, LLM reshape prompts) normalized script before, so it passed straight through to the pasted result.
+
+### Added
+- **`WHISPER_ZH_SIMPLIFY=1`** (new default-on knob, advanced config): normalizes Traditional → Simplified
+  via `opencc`'s character-level `t2s` mapping. Applied twice — right after the corrections table (covers
+  the short-text path that skips the LLM) and again after LLM reshaping (covers the rare case where the
+  local model itself echoes a Traditional glyph). Idempotent on already-Simplified or non-CJK text, so
+  both call sites are safe no-ops in the common case. Set `0` to keep Traditional output (e.g. Taiwan/HK
+  users). `opencc` is an optional dependency — missing it degrades silently to no conversion, and
+  `vinput --doctor` now flags it with a `brew install opencc` hint so the degradation is never silent to
+  the user, per the zero-silent-failure rule.
+- **LLM reshape prompts** (`clean_with_llm`, both short and long templates) gained a hard rule requiring
+  Simplified Chinese output, as defense-in-depth alongside the opencc pass.
+
+### Fixed
+- Voice input pasting Traditional Chinese characters by default even when the config and spoken input
+  were plain Mandarin/Simplified — root-caused to a Whisper training-data script bias, not a config bug.
+
 ## [1.12.0] — 2026-07-19
 
 Mining reminder for the corrections table ([#49](https://github.com/aimer1124/local-voice-input/issues/49)) — the tool now nudges you to harvest new correction rules once enough real usage accumulates, closing the loop on the data-driven corrections workflow.

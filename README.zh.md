@@ -340,6 +340,7 @@ HUD_Y_PERCENT=50 HUD_FONT_SIZE=36 ~/.whisper_models/hud "测试样式" 2
 
 ```bash
 WHISPER_THREADS=8             # 推理线程数
+WHISPER_ZH_SIMPLIFY=1         # 繁→简归一（依赖可选安装的 opencc）。Whisper -l zh 只选语言分支、不选字形——large-v3 系模型常在 -l zh 下吐繁体字形，跟口音/用词无关。设 0 保留繁体输出（如 Taiwan/HK 用户）。对已是简体/非中文文本天然幂等；未装 opencc 时静默降级为不转换（vinput --doctor 会提示安装）
 WHISPER_BEAM_SIZE=5           # beam search 路数，减少同音字误选；延迟 +0.5s
 WHISPER_TEMPERATURE_INC=0.2   # 温度递增步长，失败时温度采样兜底防吐空
 # WHISPER_TEMPERATURE=0       # 起始温度，留空=whisper.cpp 默认

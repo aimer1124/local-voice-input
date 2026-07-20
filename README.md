@@ -340,6 +340,7 @@ Add them to `~/.config/vinput.conf` by hand when needed (blank = built-in defaul
 
 ```bash
 WHISPER_THREADS=8             # inference threads
+WHISPER_ZH_SIMPLIFY=1         # Traditional→Simplified normalization (opencc, optional dep). Whisper's -l zh picks the language, not the script — large-v3-class models often emit Traditional glyphs regardless of accent. 0 to keep Traditional output (e.g. Taiwan/HK users). No-op on already-simplified/non-CJK text; falls back to no-op if `opencc` isn't installed (`vinput --doctor` flags it)
 WHISPER_BEAM_SIZE=5           # beam-search width, reduces homophone misses; +0.5s latency
 WHISPER_TEMPERATURE_INC=0.2   # temperature increment step, a sampling fallback against empty output on failure
 # WHISPER_TEMPERATURE=0       # starting temperature; blank = whisper.cpp default

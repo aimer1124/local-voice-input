@@ -32,6 +32,11 @@ OLLAMA_TIMEOUT="${OLLAMA_TIMEOUT:-15}"
 # fire-and-forget：失败/超时都不影响录音。设 0 关闭。RAW 模式不过 LLM，下面会自动跳过预热。
 OLLAMA_WARMUP="${OLLAMA_WARMUP:-1}"
 WHISPER_LANG="${WHISPER_LANG:-zh}"
+# 繁→简归一（见 to_simplified）。Whisper -l zh 只选语言分支、不选字形；large-v3 系模型
+# 训练语料混了繁体，常在 -l zh 下吐出繁体字形，跟说话人口音/用词无关，whisper 参数调不动。
+# 依赖可选安装的 opencc；未装时优雅降级为不转换（vinput --doctor 会给安装提示）。
+# 要保留繁体输出（如 Taiwan/HK 用户）→ 设为 0。
+WHISPER_ZH_SIMPLIFY="${WHISPER_ZH_SIMPLIFY:-1}"
 WHISPER_THREADS="${WHISPER_THREADS:-8}"
 SHORT_TEXT_THRESHOLD="${SHORT_TEXT_THRESHOLD:-15}"
 # 长内容阈值（v1.8.0）：转写字数 ≥ 此值时，LLM 整形从「提炼成一句」切到「整理+保结构、
@@ -191,6 +196,29 @@ apply_corrections() {
 }
 
 # ──────────────────────────────────────────────────────────────
+# 繁→简归一（见 WHISPER_ZH_SIMPLIFY 顶部注释）。用 opencc 的 t2s 字符级映射，只重写有
+# 繁体字形的汉字，不识别为繁体的字符（含英文/数字/已是简体的汉字）原样透传，天然幂等——
+# 对已经是简体的文本重复调用零副作用，所以两处调用点（纠错表之后、LLM 整形之后）都安全。
+#
+# 失败路径：关闭开关 / 空文本 / 未装 opencc / opencc 异常退出 → 原样返回，绝不吞用户输入。
+# 用法：to_simplified <text>
+# ──────────────────────────────────────────────────────────────
+to_simplified() {
+    local text="$1"
+    [ "$WHISPER_ZH_SIMPLIFY" = "1" ] || { printf '%s' "$text"; return; }
+    [ -z "$text" ] && { printf '%s' "$text"; return; }
+    command -v opencc >/dev/null 2>&1 || { printf '%s' "$text"; return; }
+
+    local out
+    out=$(printf '%s' "$text" | opencc -c t2s.json 2>/dev/null)
+    if [ -n "$out" ]; then
+        printf '%s' "$out"
+    else
+        printf '%s' "$text"
+    fi
+}
+
+# ──────────────────────────────────────────────────────────────
 # 列出在给定文本上"应该会命中"的纠错规则（用于 history 日志，#19）。
 # 输出每行 "correct\twrong"；空规则集 / 空文本 / 无纠错文件 → 空输出。
 # 注意：是 substring 检查（case-insensitive ASCII），不实际改文本。
@@ -335,6 +363,7 @@ clean_with_llm() {
 4. **绝对不要生成代码块**：把口述转成自然语言指令/说明，不是代码。
 5. **保留并理顺结构**：口述里的分点（'第一…第二…' 或 '1.…2.…3.…'）原样保留为分点；多个主题用分句/换行分开，别揉成一坨。
 6. 严禁输出任何解释、寒暄、'以下是整理后的内容'之类的引导语。**只输出整理后的文本本身**。
+7. 只用简体中文输出，禁止繁体字。
 
 【示例】
 输入: 嗯我想说的是，首先呢把这个登录页面重构一下，那个，用 hooks 改写，然后第二个就是，加一个加载中的状态，对了还有，记得不要把 token 存到 localStorage 里，要放到 httpOnly 的 cookie
@@ -355,6 +384,7 @@ clean_with_llm() {
 4. **绝对不要生成代码块**：用户说"写一个组件"——你输出的是\"写一个 React 组件 UserList 渲染 props 数组\"这样的指令，**不是** \`\`\`function UserList() {...} \`\`\`。
 5. 保留列表结构（'第一…第二…第三…' 或'1.…2.…3.…'）。
 6. 严禁输出任何解释、寒暄、'以下是清理后的指令'之类的引导语。**只输出最终文本本身**。
+7. 只用简体中文输出，禁止繁体字。
 
 【示例】
 输入: 嗯，那个，我想说的是，帮我改一下这个函数，让它返回数组
@@ -697,6 +727,7 @@ if [ "${1:-}" = "--test-transcribe" ] && [ -n "${2:-}" ]; then
     fi
 
     RAW_RESULT=$(apply_corrections "$RAW_RESULT")
+    RAW_RESULT=$(to_simplified "$RAW_RESULT")
     printf '%s\n' "$RAW_RESULT"
     exit 0
 fi
@@ -990,6 +1021,7 @@ RAW_PRE_CORRECTIONS="$RAW_RESULT"
 # Whisper 中文模型对英文产品名（Claude/Cloud、Cursor/Cursors）极易混淆，
 # 这些 LLM 也救不回来（语义上下文一样），只能靠用户级映射表根治。
 RAW_RESULT=$(apply_corrections "$RAW_RESULT")
+RAW_RESULT=$(to_simplified "$RAW_RESULT")
 
 # 短文本阈值（v1.1.3）：用 wc -m 数字符数（中文 1 字 = 1），不再用字节数。
 # 默认 8 字 ≈ 中文短指令的下限（"删除多余文件" 6 字仍走 LLM，"取消" 2 字跳过）。
@@ -1022,6 +1054,10 @@ if ! guard_critical_tokens "$MODE" "$RAW_RESULT" "$CLEANED_RESULT"; then
     MODE="${MODE}-guard"
 fi
 vlog "llm:done mode=$MODE"
+
+# 兜底：即使 raw 侧已归一，本地小模型整形时仍偶发夹带繁体字形（词表/训练语料混入）。
+# 对 EN 模式的英文输出是幂等 no-op（opencc t2s 只重写繁体汉字）。
+CLEANED_RESULT=$(to_simplified "$CLEANED_RESULT")
 
 # 剪贴板恢复（#12 的零成本替代）：pbcopy 前先暂存用户剪贴板。只在会自动粘贴时暂存 ——
 # AUTO_PASTE=0 时结果本身就该留在剪贴板里。
