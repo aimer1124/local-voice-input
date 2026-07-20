@@ -2,7 +2,7 @@
 
 > English | [中文 ↓](#中文)
 
-Public roadmap for **local-voice-input**. Last full review: **2026-07-07 (v1.10.0)**. Priorities are
+Public roadmap for **local-voice-input**. Last full review: **2026-07-20 (v1.13.0)**. Priorities are
 re-ordered by the [feature gate](#feature-gate-7-rules) below — items that kill **silent failures** and
 **install friction** come first; platform expansion comes last.
 
@@ -62,26 +62,26 @@ fee → real burden for a free OSS tool; (d) doubles maintenance.
 | HUD notarization | [#7](https://github.com/aimer1124/local-voice-input/issues/7) | ⏸ Hits (c): the **only $99/yr** item, and **non-blocking** — quarantine already worked around (`xattr -d` + local swiftc build). Do it only if you already have a paid dev account, or users actually hit Gatekeeper |
 | Linux / X11 / Windows port | [#10](https://github.com/aimer1124/local-voice-input/issues/10) | ⏸ DEFER — hits (d): Raycast/osascript/Swift HUD are all macOS-native; a port doubles maintenance |
 
-### 📌 Active backlog (2026-07-07 review — positioning: "the Chinese prompt dictation tool", usage-data-driven)
+### 📌 Active backlog (2026-07-20 review — positioning: "the Chinese prompt dictation tool", usage-data-driven)
 
-Ordered by recommended sequence; grounded in 212 field takes (2026-05-29 → 07-06: 70% full-mode, 4% number-guard fallbacks, p50=25 / p90=81 chars).
+Ordered by recommended sequence; grounded in 212+ field takes (2026-05-29 → 07-20: 70% full-mode, 4% number-guard fallbacks, p50=25 / p90=81 chars).
 
 | # | Task | Issue | Why / gate |
 |---|---|---|---|
-| 1 | LLM model refresh eval (qwen2.5:3b → qwen3-class) | [#48](https://github.com/aimer1124/local-voice-input/issues/48) | ✅ Shipped in v1.11.0 — default is now `qwen3:4b-instruct` (7/7 faithfulness, 0.29s hot path, wins the dropped-negation probes); watch guard-fallback rate in history |
-| 2 | Corrections-mining reminder | [#49](https://github.com/aimer1124/local-voice-input/issues/49) | Table nearly empty (1 hit / 212 takes); `--suggest` exists, only the trigger is missing. Small |
-| 3 | Edit mode: select text + spoken rewrite | [#50](https://github.com/aimer1124/local-voice-input/issues/50) | Natural second half of prompt dictation; zero new permissions. After #48 (rewrite quality rides on the model) |
-| 4 | Continuous dictation (append & re-reshape) | [#51](https://github.com/aimer1124/local-voice-input/issues/51) | p90=81 chars → long asks are multi-take; trigger design is the hard part, default OFF. After #50 |
-| 5 | Decouple recording from processing (spool queue) | [#42](https://github.com/aimer1124/local-voice-input/issues/42) | Re-scoped after v1.9.2 (Raycast-EOF was the real culprit): review `lock.log` ~2026-07-20; if busy rejections vanished, downgrade or close |
+| 1 | Edit mode: select text + spoken rewrite | [#50](https://github.com/aimer1124/local-voice-input/issues/50) | Natural second half of prompt dictation; zero new permissions. Unblocked — #48/#49 both shipped |
+| 2 | Continuous dictation (append & re-reshape) | [#51](https://github.com/aimer1124/local-voice-input/issues/51) | p90=81 chars → long asks are multi-take; trigger design is the hard part, default OFF. After #50 |
 
 ### 🔵 Low-priority / done backlog
 
 | Task | Issue | Verdict |
 |---|---|---|
-| Direct Unicode injection | [#12](https://github.com/aimer1124/local-voice-input/issues/12) | 🟡 Superseded in practice — clipboard-restore (v1.9.0) removes its only real win (not clobbering the clipboard); CGEventPost still needs Accessibility. Close unless new evidence |
+| LLM model refresh eval (qwen2.5:3b → qwen3-class) | [#48](https://github.com/aimer1124/local-voice-input/issues/48) | ✅ Shipped in v1.11.0 — default is now `qwen3:4b-instruct` (7/7 faithfulness, 0.29s hot path, wins the dropped-negation probes) |
+| Corrections-mining reminder | [#49](https://github.com/aimer1124/local-voice-input/issues/49) | ✅ Shipped — `SUGGEST_REMINDER_THRESHOLD`/`SUGGEST_STATE_FILE` nudge you to run `corrections --suggest` after 100 new takes |
+| Decouple recording from processing (spool queue) | [#42](https://github.com/aimer1124/local-voice-input/issues/42) | 🟡 Closed 2026-07-20 — scheduled `lock.log` review (206 presses, 2026-06-23→07-20): `toggle:busy-processing` fired 3× total, all on day one, zero in the following 27 days. Current lock+debounce+warmup stack already solved it; reopen with fresh evidence if busy-rejections resurface |
+| Direct Unicode injection | [#12](https://github.com/aimer1124/local-voice-input/issues/12) | 🟡 Closed 2026-07-20 — superseded in practice: clipboard-restore (v1.9.0) removed its only real win (not clobbering the clipboard); CGEventPost still needs Accessibility |
 | Per-app mode override (terminal → Raw) | [#43](https://github.com/aimer1124/local-voice-input/issues/43) | ✅ Shipped in v1.10.0 — `APP_MODES_FILE` bundle-id→mode map via `lsappinfo`; default OFF, zero new permissions |
 
-> **Next**: work the active backlog top-down; EN dictation mode is under live trial (was 0 uses before the hotkey got bound) — let history decide its future. Still not doing: streaming ASR, cross-platform, GUI, screen-context awareness, voice commands.
+> **Next**: #50 (Edit mode) is the active backlog. EN dictation mode is under live trial (was 0 uses before the hotkey got bound) — let history decide its future. Still not doing: streaming ASR, cross-platform, GUI, screen-context awareness, voice commands.
 
 ---
 
@@ -99,7 +99,7 @@ Ordered by recommended sequence; grounded in 212 field takes (2026-05-29 → 07-
 
 本文档为 **local-voice-input** 的公开开发路线图。每个待办项对应一个 [Issue](https://github.com/aimer1124/local-voice-input/issues)。
 
-> 最后一次全量评审：**2026-07-07（v1.10.0）**。优先级按下方[功能准入门槛](#功能准入门槛)重排——能消灭**静默失败**和**安装摩擦**的事项最优先，平台扩张最后。
+> 最后一次全量评审：**2026-07-20（v1.13.0）**。优先级按下方[功能准入门槛](#功能准入门槛)重排——能消灭**静默失败**和**安装摩擦**的事项最优先，平台扩张最后。
 
 ### 🎯 北极星
 
@@ -154,28 +154,26 @@ P0 清零后复盘剩余项时，在[功能准入门槛](#功能准入门槛)之
 | HUD 二进制 Apple 公证 | [#7](https://github.com/aimer1124/local-voice-input/issues/7) | ⏸ **暂缓** | 命中 (c)：**唯一要 Apple Developer $99/年**的项，且**非阻塞**——quarantine 已用 `install.sh` 的 `xattr -d` + 有 swiftc 时本地编译（产物无 quarantine）绕过。仅当①已有付费开发者账号 或 ②真有用户反馈 Gatekeeper 挡路 才做。免费替代：引导走本地 swiftc 编译 |
 | Linux / X11 / Windows 移植 | [#10](https://github.com/aimer1124/local-voice-input/issues/10) | ⏸ **DEFER** | 命中 (d)：Raycast/osascript/Swift HUD 全是 macOS 原生，移植 = 维护翻倍。无费用，合法的 someday |
 
-#### 📌 活跃 backlog（2026-07-07 评审——定位收窄为「中文 prompt 口述器」，用真实使用数据驱动）
+#### 📌 活跃 backlog（2026-07-20 评审——定位收窄为「中文 prompt 口述器」，用真实使用数据驱动）
 
-按建议落地顺序排列；依据 = 212 条实测数据（2026-05-29 → 07-06：70% full 模式、4% 数字守卫回退、长度 p50=25 / p90=81 字）。
+按建议落地顺序排列；依据 = 212+ 条实测数据（2026-05-29 → 07-20：70% full 模式、4% 数字守卫回退、长度 p50=25 / p90=81 字）。
 
 | 序 | 任务 | Issue | 依据 / 门槛 |
 |---|---|---|---|
-| 1 | LLM 模型升级评测（qwen2.5:3b → qwen3 档） | [#48](https://github.com/aimer1124/local-voice-input/issues/48) | ✅ **v1.11.0 已交付**——默认换为 `qwen3:4b-instruct`（忠实度 7/7、热路径 0.29s、探针不吞否定）；后续观察 history 守卫回退率 |
-| 2 | 纠错表挖掘提醒 | [#49](https://github.com/aimer1124/local-voice-input/issues/49) | 表近乎空（212 条只命中 1 次）；`--suggest` 已有，只缺触发时机。小活 |
-| 3 | 口述改写模式（选中文本 + 口述指令） | [#50](https://github.com/aimer1124/local-voice-input/issues/50) | 口述 prompt 的天然下半场；零新权限。排 #48 之后（改写质量吃模型） |
-| 4 | 连续口述（补一句合并重构） | [#51](https://github.com/aimer1124/local-voice-input/issues/51) | p90=81 字 → 长需求多为分次说；触发判定是难点，默认关起步。排 #50 之后 |
-| 5 | 录音/处理解耦（spool 队列） | [#42](https://github.com/aimer1124/local-voice-input/issues/42) | v1.9.2 后已改判（真凶是 Raycast EOF）：~2026-07-20 回看 lock.log，busy 拒绝若已消失则降级或关闭 |
+| 1 | 口述改写模式（选中文本 + 口述指令） | [#50](https://github.com/aimer1124/local-voice-input/issues/50) | 口述 prompt 的天然下半场；零新权限。已解锁——#48/#49 均已交付 |
+| 2 | 连续口述（补一句合并重构） | [#51](https://github.com/aimer1124/local-voice-input/issues/51) | p90=81 字 → 长需求多为分次说；触发判定是难点，默认关起步。排 #50 之后 |
 
 #### 🔵 低优先 / 已完结
 
-| 任务 | Issue | 裁决 | 理由 |
-|---|---|---|---|
-| 直接 Unicode 注入（CGEventPost） | [#12](https://github.com/aimer1124/local-voice-input/issues/12) | 🟡 **实质被取代** | 剪贴板恢复（v1.9.0）已消掉其唯一真实收益（不污染剪贴板）；CGEventPost 仍需辅助功能权限。除非有新证据，建议关闭 |
-| 按 App 模式覆盖（终端 → Raw） | [#43](https://github.com/aimer1124/local-voice-input/issues/43) | ✅ **已交付** | v1.10.0：`APP_MODES_FILE` bundle-id→模式映射，`lsappinfo` 探测；默认关、零新权限、不进默认模板 |
+| 任务 | Issue | 裁决 |
+|---|---|---|
+| LLM 模型升级评测（qwen2.5:3b → qwen3 档） | [#48](https://github.com/aimer1124/local-voice-input/issues/48) | ✅ **v1.11.0 已交付**——默认换为 `qwen3:4b-instruct`（忠实度 7/7、热路径 0.29s、探针不吞否定） |
+| 纠错表挖掘提醒 | [#49](https://github.com/aimer1124/local-voice-input/issues/49) | ✅ **已交付**——`SUGGEST_REMINDER_THRESHOLD`/`SUGGEST_STATE_FILE`，新增 100 条语料后提示跑 `corrections --suggest` |
+| 录音/处理解耦（spool 队列） | [#42](https://github.com/aimer1124/local-voice-input/issues/42) | 🟡 **2026-07-20 已关闭**——按计划回看 lock.log（206 次按键，2026-06-23→07-20）：`toggle:busy-processing` 共 3 次、全部发生在第一天，之后 27 天/约 200 次按键零命中。现有锁+去抖+预热机制已解决；如再现忙碌拒绝，附新证据重开 |
+| 直接 Unicode 注入（CGEventPost） | [#12](https://github.com/aimer1124/local-voice-input/issues/12) | 🟡 **2026-07-20 已关闭**——实质被取代：剪贴板恢复（v1.9.0）已消掉其唯一真实收益（不污染剪贴板）；CGEventPost 仍需辅助功能权限 |
+| 按 App 模式覆盖（终端 → Raw） | [#43](https://github.com/aimer1124/local-voice-input/issues/43) | ✅ **已交付**——v1.10.0：`APP_MODES_FILE` bundle-id→模式映射，`lsappinfo` 探测；默认关、零新权限、不进默认模板 |
 
-> **下一步**：按活跃 backlog 自上而下推进；EN 口述模式试用中（绑定快捷键前 0 使用），让 history 数据决定去留。继续不做：流式识别、跨平台、GUI 化、屏幕上下文感知、语音命令。
-
-> **下一步**：v1.6.0 后产品处于干净状态，优先**观察实际用户反馈再定方向**，而非继续堆功能。
+> **下一步**：#50（口述改写模式）是当前活跃 backlog。EN 口述模式试用中（绑定快捷键前 0 使用），让 history 数据决定去留。继续不做：流式识别、跨平台、GUI 化、屏幕上下文感知、语音命令。
 
 ### 💡 想加点别的？
 
