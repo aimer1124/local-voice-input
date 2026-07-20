@@ -18,7 +18,7 @@
 | **忠实度回归** | `tests/llm/` 的 6 case + 必含/绝不含断言套件 | "LLM 测试" |
 | **动态 prompt** | `USE_RECENT_PROMPT=1`：最近 N 次成功转写拼进 Whisper `--prompt`，同话题术语命中 +20~40% | "上下文记忆" |
 | **VAD 双模** | `USE_VAD=0`（纯 toggle，推荐）/ `=1`（SoX silence 滤波自动停，仅安静环境） | "语音检测" |
-| **spool 队列** | 录音/处理解耦的待办设想（issue #42，v1.9.2 后观察中） | — |
+| **spool 队列** | 录音/处理解耦的待办设想（issue #42，2026-07-20 已关闭：lock.log 显示忙碌拒绝已随现有锁+去抖+预热机制消失） | — |
 | **三层目录** | 主源码仓库 / homebrew-tap / `~/.whisper_models/`（运行目录，勿放源码副本） | — |
 | **45s 硬超时** | `MAX_REC_SECONDS=45`，防忘按停的兜底 | — |
 | **double-fire 去抖** | `DOUBLE_FIRE_GRACE=0.7s`，忽略 Raycast 重复触发 | — |
