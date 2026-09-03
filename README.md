@@ -106,6 +106,47 @@ After `install.sh` finishes, you still need to do the following in System Settin
 > **opening the relevant Settings panel for you**. Auto-paste resumes once granted; press `⌘V` manually
 > until then.
 
+### Pausing & restoring (without uninstalling)
+
+To fully stop vinput — no background process, no login-time autostart, no live hotkey — while keeping
+the models, config and hotword list on disk:
+
+```bash
+# 1. Kill leftover runtime processes (a stuck HUD can outlive a failed run)
+pkill -f vinput_bg.sh; pkill -f '.whisper_models/hud'; pkill -f 'rec -q'
+rm -f /tmp/vinput_hud.pid /tmp/vinput_debug.log*; rm -rf /tmp/vinput.lock.d
+
+# 2. Stop Ollama and cancel its login-time autostart (also unloads the LaunchAgent plist)
+brew services stop ollama
+
+# 3. Remove the hotkey entry points
+rm -f ~/.config/raycast-scripts/voice-input.sh \
+      ~/.config/raycast-scripts/voice-input-en.sh \
+      ~/.config/raycast-scripts/voice-input-raw.sh
+rm -f ~/.whisper_models/vinput ~/.whisper_models/vinput.sh \
+      ~/.whisper_models/vinput_bg.sh ~/.whisper_models/hud
+```
+
+Raycast watches the script directory, so step 3 makes the commands **and their hotkey bindings**
+disappear on their own — there is no stale entry to clean up by hand. `~/.whisper_models/*.bin`,
+`~/.config/vinput.conf`, `~/.config/vinput_hotwords.txt` and `~/.cache/vinput/lock.log` are untouched.
+
+To restore:
+
+```bash
+# Source install: redeploy scripts + symlinks
+cd /path/to/local-voice-input && ./install.sh
+# Homebrew install: re-run the second bootstrap stage instead
+vinput setup
+
+brew services start ollama
+```
+
+⚠️ Neither `install.sh` nor `vinput setup` re-registers the directory with Raycast — they only copy the
+scripts back. If you also removed `~/.config/raycast-scripts` from **Raycast Settings → Extensions →
+Script Commands → Script Directories**, re-add it there and rebind the hotkey (step 3 of
+[Manual setup](#manual-setup-the-parts-automation-cant-cover)).
+
 ### Requirements
 
 - macOS 13+

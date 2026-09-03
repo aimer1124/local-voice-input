@@ -105,6 +105,45 @@ cd local-voice-input
 > 「📋 已复制到剪贴板 · 自动粘贴需勾选辅助功能」并**自动帮你打开对应设置面板**，授权
 > 后即恢复自动粘贴。授权前手动按 `⌘V` 即可。
 
+### 暂停与恢复（不卸载）
+
+想彻底停掉 vinput —— 没有后台进程、不开机自启、快捷键也不再响应 —— 同时保留磁盘上的模型、配置和热词表：
+
+```bash
+# 1. 清掉残留运行时进程（一次失败的流程可能留下卡住的 HUD）
+pkill -f vinput_bg.sh; pkill -f '.whisper_models/hud'; pkill -f 'rec -q'
+rm -f /tmp/vinput_hud.pid /tmp/vinput_debug.log*; rm -rf /tmp/vinput.lock.d
+
+# 2. 停掉 Ollama 并取消开机自启（同时会卸载 LaunchAgent plist）
+brew services stop ollama
+
+# 3. 移除快捷键入口
+rm -f ~/.config/raycast-scripts/voice-input.sh \
+      ~/.config/raycast-scripts/voice-input-en.sh \
+      ~/.config/raycast-scripts/voice-input-raw.sh
+rm -f ~/.whisper_models/vinput ~/.whisper_models/vinput.sh \
+      ~/.whisper_models/vinput_bg.sh ~/.whisper_models/hud
+```
+
+Raycast 会监听脚本目录，所以第 3 步一执行，命令**连同它们的快捷键绑定**会自动消失，不需要手动清理失效项。
+`~/.whisper_models/*.bin`、`~/.config/vinput.conf`、`~/.config/vinput_hotwords.txt` 和
+`~/.cache/vinput/lock.log` 均原样保留。
+
+恢复：
+
+```bash
+# 源码安装：重新部署脚本 + 符号链接
+cd /path/to/local-voice-input && ./install.sh
+# Homebrew 安装：改为重跑第二阶段引导
+vinput setup
+
+brew services start ollama
+```
+
+⚠️ `install.sh` 和 `vinput setup` 都**不会**把目录重新注册进 Raycast，它们只负责把脚本拷回去。如果你当初
+还在 **Raycast 设置 → Extensions → Script Commands → Script Directories** 里移除了
+`~/.config/raycast-scripts`，需要在那里重新添加并重新绑定快捷键（即[手动配置](#手动配置自动化无法覆盖的部分)的第 3 步）。
+
 ### 系统要求
 
 - macOS 13+
